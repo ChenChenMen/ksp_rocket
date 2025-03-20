@@ -5,7 +5,7 @@ import logging
 
 import jax.numpy as np
 from jax.scipy.linalg import expm
-from jax import jacobian
+from jax import jacfwd
 
 from ascent_trajopt.integrator import RK_
 
@@ -25,36 +25,30 @@ class InsufficientInputDimensionError(ValueError):
     """Raise when input vector dimension is mismatched."""
 
 
-def apply_cache(query_func_name: str, update_func_name: str):
-    """Decorator factory to apply cache query and update."""
-    def decorator(method):
-        """Define the decorator for an internal cache defined with an object."""
-        def wrapper(self, *args, **kwargs):
-            """Wrap with the input of the decorated function."""
-            query_func = getattr(self, query_func_name)
-            query_result = query_func(*args, **kwargs, func_name=method.__name__)
-            # Directly return at cache hit
-            if query_result is not None:
-                return query_result
-
-            # Otherwise execute the method
-            update_result = method(self, *args, **kwargs)
-            yield update_func_name
-
-            # Update cache with the new evaluation
-            update_func = getattr(self, update_func_name)
-            update_func(*args, **kwargs, func_name=method.__name__, new_value=update_result)
-
-        return wrapper
-    return decorator
-
-
 class DynamicsModel(metaclass=abc.ABCMeta):
     """Base dynamics model that carries operations."""
 
     # Define required number of elements in the state/control vector
     REQUIRED_STATE_NUM: int = None
     REQUIRED_CTRL_NUM: int = None
+    
+    def apply_cache(method):
+        """Decorator to apply cache query and update."""
+        def wrapper(self, *args, **kwargs):
+            """Wrap with the input of the decorated method."""
+            query_result = self._query_cache(method.__name__, *args, **kwargs)
+            # Directly return at cache hit
+            if query_result is not None:
+                return query_result
+
+            # Otherwise execute the method
+            update_result = method(self, *args, **kwargs)
+            yield update_result
+
+            # Update cache with the new evaluation
+            self._update_cache(method.__name__, *args, **kwargs, new_value=update_result)
+
+        return wrapper
 
     def __init__(self):
         """Construct with some internal used cache."""
@@ -76,7 +70,7 @@ class DynamicsModel(metaclass=abc.ABCMeta):
         input_match = self._lru_cache[func_name]['input_match']
         cache_hit = (
             input_match is not None and np.allclose(time, input_match[0]) and
-            np.allclose(state, input_match[1]) and np.allclose(control, input_match[0])
+            np.allclose(state, input_match[1]) and np.allclose(control, input_match[2])
         )
         return self._lru_cache[func_name]['value_store'] if cache_hit else None
 
@@ -95,23 +89,23 @@ class DynamicsModel(metaclass=abc.ABCMeta):
         # Check if required dimensions are defined
         if self.REQUIRED_STATE_NUM is None or self.REQUIRED_CTRL_NUM is None:
             raise RequiredDimensionNotSetError(f'Required input vector dimensions are not defined for {self.__class__}')
-        # Check if required dimensions of given state vectors
-        if state.shape(0) != self.REQUIRED_STATE_NUM:
-            raise InsufficientInputDimensionError(f'Input state has size {state.shape(0)}, expect {self.REQUIRED_STATE_NUM}.')
-        # Check if required dimensions of given control vectors
-        if control.shape(0) != self.REQUIRED_CTRL_NUM:
-            raise InsufficientInputDimensionError(f'Input control has size {state.shape(0)}, expect {self.REQUIRED_CTRL_NUM}.')
-
         # Ensure the input numpy dimensions is at least 2D
         time = np.atleast_1d(time)
         state = np.atleast_2d(state)
-        control = np.atleast_2d(state)
+        control = np.atleast_2d(control)
+
+        # Check if required dimensions of given state vectors
+        if (num_state := state.shape[1]) != self.REQUIRED_STATE_NUM:
+            raise InsufficientInputDimensionError(f'Input state has size {num_state}, expect {self.REQUIRED_STATE_NUM}.')
+        # Check if required dimensions of given control vectors
+        if (num_ctrl := control.shape[1]) != self.REQUIRED_CTRL_NUM:
+            raise InsufficientInputDimensionError(f'Input control has size {num_ctrl}, expect {self.REQUIRED_CTRL_NUM}.')
 
         # Check if the time and state and control array have consistent shape
-        if time.size != state.shape(1) != control.shape(1):
+        if (time_size := time.size) != (state_size := state.shape[0]) != (ctrl_size := control.shape[0]):
             raise InsufficientInputDimensionError(
-                f'Input arrays dimension don\'t agree. Provided {time.size} timestamps but {state.shape(1)} states '
-                f'and {control.shape(1)} controls.'
+                f'Input arrays dimension don\'t agree. Provided {time_size} timestamps but {state_size} states '
+                f'and {ctrl_size} controls.'
             )
 
         return time, state, control
@@ -135,27 +129,27 @@ class DynamicsModel(metaclass=abc.ABCMeta):
         )
         return kp1th_state - kth_state
 
-    @apply_cache(query_func_name='_query_cache', update_func_name='_update_cache')
+    @apply_cache
     def A(self, time: np.ndarray, state: np.ndarray, control: np.ndarray):
         """Computed state matrix for state equation linearization with auto differentiation."""
         time, state, control = self.check_input_dimensions(time=time, state=state, control=control)
         # Taking partial by constructing a temporary function that only depends on state or control
         state_only_func = lambda x: self.continuous_time_state_equation(time=time, state=x, control=control)
-        return jacobian(state_only_func)(state)
+        return jacfwd(state_only_func)(state)
 
-    @apply_cache(query_func_name='_query_cache', update_func_name='_update_cache')
+    @apply_cache
     def B(self, time: np.ndarray, state: np.ndarray, control: np.ndarray):
         """Computed input matrix for state equation linearization with auto differentiation."""
         time, state, control = self.check_input_dimensions(time=time, state=state, control=control)
         # Taking partial by constructing a temporary function that only depends on state or control
         control_only_func = lambda u: self.continuous_time_state_equation(time=time, state=state, control=u)
-        return jacobian(control_only_func)(control)
+        return jacfwd(control_only_func)(control)
 
     def Ad(self, kth_time: np.ndarray, kth_state: np.ndarray, kth_control: np.ndarray, discrete_time_step):
         """Computed discrete state matrix with auto differentiation."""
         kth_time, kth_state, kth_control = self.check_input_dimensions(time=kth_time, state=kth_state, control=kth_control)
         # Formulate the ultra state control matrix
-        state_size, ctrl_size = kth_state.shape(1), kth_control.shape(1)
+        state_size, ctrl_size = kth_state.shape[0], kth_control.shape[0]
         state_control_size = state_size + ctrl_size
         state_control_matrix = np.pad(
             np.hstack((kth_state, kth_control)), ((0, 0), (0, state_control_size - state_size)), 'constant', constant_values=0
@@ -170,6 +164,7 @@ class DynamicsModel(metaclass=abc.ABCMeta):
         where t is a 1D ndarray and x_vec is a 2D ndarray with t.size == x_vec.shape[1]
         """
 
+from core.constant import G0
 
 class PendulumCartDynamicsModel(DynamicsModel):
     """Define a dynamics model for test usage."""
@@ -199,10 +194,12 @@ class PendulumCartDynamicsModel(DynamicsModel):
         _, state, control = self.check_input_dimensions(time=time, state=state, control=control)
 
         # Unpack state vector 
-        theta = state[0, :]
-        theta_dot = state[1, :]
-        x = state[2, :]
-        x_dot = state[3, :]
+        theta = state[:, 0]
+        theta_dot = state[:, 1]
+        x_dot = state[:, 3]
+
+        # Unpack control vector
+        force = control[:, 0]
 
         # Define useful intermediate numeric result
         cos_theta = np.cos(theta)
@@ -217,16 +214,20 @@ class PendulumCartDynamicsModel(DynamicsModel):
         mass_leng_theta_dot_sq = mass_leng_pend * theta_dot_sq
 
         theta_dotdot = -1 / (self.MASS_CART + self.MASS_PEND * sin_sq_theta) / self.LENG_PEND * (
-            0.5 * mass_leng_theta_dot_sq * sin_2theta + control * cos_theta + total_mass * G0 * sin_theta
+            0.5 * mass_leng_theta_dot_sq * sin_2theta + force * cos_theta + total_mass * G0 * sin_theta
         )
-        x_dotdot = inv_total_mass * (control + mass_leng_theta_dot_sq * sin_theta + mass_leng_pend * theta_dotdot * cos_theta)
+        x_dotdot = inv_total_mass * (force + mass_leng_theta_dot_sq * sin_theta + mass_leng_pend * theta_dotdot * cos_theta)
 
         # Formulate the state equation
-        return np.vstack([theta_dot, theta_dotdot, x_dot, x_dotdot])
+        return np.asarray([theta_dot[0], theta_dotdot[0], x_dot[0], x_dotdot[0]])
 
 
 time = np.array([0, 1, 2])
-state = np.array([[0.01, 0.005, 0.001], [0, -0.001, 0.001], [0, 0.1, 0.2], [0.01, 0.01, 0.01]])
-ctrl = np.array([0, 0.1, 0])
+state = np.array([[0.01, 0.005, 0.001], [0, -0.001, 0.001], [0, 0.1, 0.2], [0.01, 0.01, 0.01]]).T
+ctrl = np.array([[0, 0.1, 0]]).T
+
+time = np.array([0])
+state = np.array([[0.01, 0, 0, 0]])
+ctrl = np.array([[0]])
 pendulum_cart_dynamics = PendulumCartDynamicsModel()
 print(list(pendulum_cart_dynamics.A(time, state, ctrl)))
