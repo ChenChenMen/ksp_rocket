@@ -3,8 +3,8 @@
 import abc
 
 import numpy as np
-from core.util import create_logger
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from rocket_util.logconfig import create_logger
 
 LOG = create_logger(__name__)
 

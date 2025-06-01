@@ -3,8 +3,8 @@
 import warnings
 
 import jax.numpy as np
-from core.complexity import BaseMonitoredClass
-from core.util import create_logger
+from rocket_util.complexity import BaseMonitoredClass
+from rocket_util.logconfig import create_logger
 
 LOG = create_logger(__name__)
 
