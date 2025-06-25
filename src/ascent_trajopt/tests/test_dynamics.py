@@ -11,6 +11,7 @@ LOG = create_logger(__name__)
 
 class SinglePendulumDynamicsModel(DynamicsModel):
     """Define a dynamics model for test usage."""
+
     # Define required number of elements in the state/control vector
     REQUIRED_STATE_NUM: int = 2
     REQUIRED_CTRL_NUM: int = 1
@@ -38,13 +39,14 @@ class SinglePendulumDynamicsModel(DynamicsModel):
         # Unpack control vector
         force = control[0]
 
-        theta_dotdot = force / (self.MASS_PEND * self.LENG_PEND ** 2) - G0 * np.sin(theta) / self.LENG_PEND
+        theta_dotdot = force / (self.MASS_PEND * self.LENG_PEND**2) - G0 * np.sin(theta) / self.LENG_PEND
         # Formulate the state equation
         return np.asarray([theta_dot, theta_dotdot])
 
 
 class PendulumCartDynamicsModel(DynamicsModel):
     """Define a dynamics model for test usage."""
+
     # Define required number of elements in the state/control vector
     REQUIRED_STATE_NUM: int = 4
     REQUIRED_CTRL_NUM: int = 1
@@ -83,15 +85,21 @@ class PendulumCartDynamicsModel(DynamicsModel):
         sin_2theta = np.sin(2 * theta)
 
         total_mass = self.MASS_CART + self.MASS_PEND
-        inv_total_mass = 1 / total_mass
         theta_dot_sq = np.power(theta_dot, 2)
         mass_leng_pend = self.MASS_PEND * self.LENG_PEND
         mass_leng_theta_dot_sq = mass_leng_pend * theta_dot_sq
+        effective_total_mass = self.MASS_CART + self.MASS_PEND * sin_sq_theta
 
-        theta_dotdot = -1 / (self.MASS_CART + self.MASS_PEND * sin_sq_theta) / self.LENG_PEND * (
-            0.5 * mass_leng_theta_dot_sq * sin_2theta + force * cos_theta + total_mass * G0 * sin_theta
+        theta_dotdot = (
+            -1
+            / (effective_total_mass * self.LENG_PEND)
+            * (0.5 * mass_leng_theta_dot_sq * sin_2theta + force * cos_theta + total_mass * G0 * sin_theta)
         )
-        x_dotdot = inv_total_mass * (force + mass_leng_theta_dot_sq * sin_theta + mass_leng_pend * theta_dotdot * cos_theta)
+        x_dotdot = (
+            1
+            / effective_total_mass
+            * (force + mass_leng_pend * theta_dot_sq * sin_theta + 0.5 * self.MASS_PEND * G0 * sin_2theta)
+        )
 
         # Formulate the state equation
         return np.asarray([theta_dot, theta_dotdot, x_dot, x_dotdot])
@@ -106,10 +114,24 @@ class TestDynamicsModel:
         time = np.array([0.0])
         state = np.array([0.0, 0.0])
         ctrl = np.array([0.0])
-
         pendulum_cart_dynamics = SinglePendulumDynamicsModel()
-        linearized_state_matrix = pendulum_cart_dynamics.A(time, state, ctrl)
-        assert np.allclose(linearized_state_matrix, np.array([[0.0, 1.0], [-G0 / pendulum_cart_dynamics.LENG_PEND, 0.0]]))
 
-        linearized_input_matrix = pendulum_cart_dynamics.B(time, state, ctrl)
-        assert np.allclose(linearized_input_matrix, np.array([[0.0], [1.0 / (pendulum_cart_dynamics.MASS_PEND * pendulum_cart_dynamics.LENG_PEND ** 2)]]))
+        linearized_state_matrix = pendulum_cart_dynamics.continuous_state_matrix(time, state, ctrl)
+        expected_state_matrix = np.array([[0.0, 1.0], [-G0 / pendulum_cart_dynamics.LENG_PEND, 0.0]])
+        assert np.allclose(linearized_state_matrix, expected_state_matrix), (
+            "Linearized state matrix does not match expected value"
+        )
+
+        # Duplicated calls to make sure the result is repeatable
+        assert np.allclose(linearized_state_matrix, pendulum_cart_dynamics.continuous_state_matrix(time, state, ctrl))
+
+        linearized_input_matrix = pendulum_cart_dynamics.continuous_input_matrix(time, state, ctrl)
+        expected_input_matrix = np.array(
+            [[0.0], [1.0 / (pendulum_cart_dynamics.MASS_PEND * pendulum_cart_dynamics.LENG_PEND**2)]]
+        )
+        assert np.allclose(linearized_input_matrix, expected_input_matrix), (
+            "Linearized input matrix does not match expected value"
+        )
+
+        # Duplicated calls to make sure the result is repeatable
+        assert np.allclose(linearized_input_matrix, pendulum_cart_dynamics.continuous_input_matrix(time, state, ctrl))

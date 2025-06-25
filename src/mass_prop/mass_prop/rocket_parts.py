@@ -9,20 +9,21 @@ from rocket_util.logconfig import create_logger
 LOG = create_logger(__name__)
 
 # Constants keynames for mass prop extraction
-MASS_KEY = 'mass'
-MOI_KEY = 'moi'
-NAME_KEY = 'name'
-REL_POS_KEY = 'rel_origin_from_parent_cg'
+MASS_KEY = "mass"
+MOI_KEY = "moi"
+NAME_KEY = "name"
+REL_POS_KEY = "rel_origin_from_parent_cg"
 
 # Constants keynames for shape prop extraction
-RADIUS_KEY = 'radius'
-HEIGHT_KEY = 'height'
-THICKNESS_KEY = 'thickness'
-DENSITY_KEY = 'density'
+RADIUS_KEY = "radius"
+HEIGHT_KEY = "height"
+THICKNESS_KEY = "thickness"
+DENSITY_KEY = "density"
 
 
 class AlreadyHaveParentError(ValueError):
     """Raise when trying to reassign a parent part."""
+
 
 class MissingRequiredMassPropertyError(ValueError):
     """Raise when a required mass property not provided."""
@@ -53,11 +54,11 @@ class Part:
         self.part_moi: np.ndarray = self.moi
 
         # Initialize inheritance information (disallow setup at construction)
-        self.parent_part: 'Part' = None
-        self.child_part_tree: list['Part'] = []
+        self.parent_part: "Part" = None
+        self.child_part_tree: list["Part"] = []
 
         ## Additionally define useful private fields for internal operations
-        self._description: str = ''
+        self._description: str = ""
         self._subassembly_cg_shift: np.ndarray = np.zeros(shape=(3, 1))
         # Record the total children mass and moment of inertia wrt the self origin
         self._children_total_mass: float = 0
@@ -69,12 +70,12 @@ class Part:
         missing_prop = [key for key in required_keys if key not in input_prop]
         if missing_prop:
             raise MissingRequiredMassPropertyError(
-                f'The following required property keys are missing {", ".join(missing_prop)} '
-                f'in supplied input property dictionary {input_prop}.'
+                f"The following required property keys are missing {', '.join(missing_prop)} "
+                f"in supplied input property dictionary {input_prop}."
             )
 
     @classmethod
-    def from_mass_prop_dict(cls, mass_prop: dict = {}) -> 'Part':
+    def from_mass_prop_dict(cls, mass_prop: dict = {}) -> "Part":
         """Construct a part from mass property dictionary."""
         Part.check_prop_dict(input_prop=mass_prop, required_keys=[MASS_KEY, MOI_KEY, NAME_KEY])
         rel_pos_specified = mass_prop.get(REL_POS_KEY)
@@ -93,22 +94,27 @@ class Part:
         identity = np.eye(rel_pos_from_cg.size)
         return self.mass * (rel_pos_from_cg.T @ rel_pos_from_cg * identity - rel_pos_from_cg @ rel_pos_from_cg.T)
 
-    def add_child_part(self, child_part: 'Part'):
+    def add_child_part(self, child_part: "Part"):
         """Compute with the added child part."""
         # Ensure that child does not already have a parent part
         if child_part.parent_part is not None:
-            raise AlreadyHaveParentError(f'Part {child_part} has an existing parent {child_part.parent_part}')
+            raise AlreadyHaveParentError(f"Part {child_part} has an existing parent {child_part.parent_part}")
 
         # Build the inheritance relations
         self.child_part_tree.append(child_part)
         child_part.parent_part = self
 
         # Update the mass property tree with the new part, set original mass prop to zero for addition
-        self.update_mass_prop(child_part=child_part, original_mass_prop={
-            MASS_KEY: 0, MOI_KEY: np.zeros(shape=(3, 3), dtype=np.float64), REL_POS_KEY: np.array([[0], [0], [0]]),
-        })
+        self.update_mass_prop(
+            child_part=child_part,
+            original_mass_prop={
+                MASS_KEY: 0,
+                MOI_KEY: np.zeros(shape=(3, 3), dtype=np.float64),
+                REL_POS_KEY: np.array([[0], [0], [0]]),
+            },
+        )
 
-    def update_mass_prop(self, child_part: 'Part', original_mass_prop: dict):
+    def update_mass_prop(self, child_part: "Part", original_mass_prop: dict):
         """Update recursively the final mass property for the combination of all available decendences."""
         # Record the self original mass prop dictionary
         self_mass_prop = self.to_dict_at(rel_pos_from_cg=self.rel_pos_from_parent_origin)
@@ -124,9 +130,9 @@ class Part:
 
         # Compute new total mass and moi for parent-child combination wrt the origin of parent body frame
         new_cg_rel_to_origin = (
-            self.mass * self._subassembly_cg_shift +
-            child_mass_prop[MASS_KEY] * child_mass_prop[REL_POS_KEY] -
-            original_mass_prop[MASS_KEY] * original_mass_prop[REL_POS_KEY]
+            self.mass * self._subassembly_cg_shift
+            + child_mass_prop[MASS_KEY] * child_mass_prop[REL_POS_KEY]
+            - original_mass_prop[MASS_KEY] * original_mass_prop[REL_POS_KEY]
         ) / new_total_mass
         self.mass = new_total_mass
 
@@ -179,7 +185,7 @@ class CylindricalShellPart(ShapedPart, Part):
     """Define a cylindrical shell part object.
 
     Assume the component body frame align with the principle frame
-    x, y - orthogonal directions along radial direction; z - axial direction 
+    x, y - orthogonal directions along radial direction; z - axial direction
     """
 
     @staticmethod
@@ -191,12 +197,12 @@ class CylindricalShellPart(ShapedPart, Part):
         mass = volumn * shape_prop[DENSITY_KEY]
 
         height = shape_prop[HEIGHT_KEY]
-        inner_radius = shape_prop[RADIUS_KEY] - 1/2 * shape_prop[THICKNESS_KEY]
-        outer_radius = shape_prop[RADIUS_KEY] + 1/2 * shape_prop[THICKNESS_KEY]
+        inner_radius = shape_prop[RADIUS_KEY] - 1 / 2 * shape_prop[THICKNESS_KEY]
+        outer_radius = shape_prop[RADIUS_KEY] + 1 / 2 * shape_prop[THICKNESS_KEY]
         # Compute moment of inertia in principle directions
-        insq_plus_outsq = inner_radius ** 2 + outer_radius ** 2
-        moi_rad = 1/12 * mass * (3 * insq_plus_outsq + 4 * height ** 2)
-        moi_axi = 1/2 * mass * insq_plus_outsq
+        insq_plus_outsq = inner_radius**2 + outer_radius**2
+        moi_rad = 1 / 12 * mass * (3 * insq_plus_outsq + 4 * height**2)
+        moi_axi = 1 / 2 * mass * insq_plus_outsq
 
         # Return pure mass prop as a dictionary
         return {
@@ -204,11 +210,14 @@ class CylindricalShellPart(ShapedPart, Part):
             MOI_KEY: np.array([[moi_rad, 0, 0], [0, moi_rad, 0], [0, 0, moi_axi]]),
             REL_POS_KEY: shape_prop.get(REL_POS_KEY, np.array([[0], [0], [0]])),
         }
-    
+
     @classmethod
     def from_shape(cls, shape_prop):
         """Formulate a cylindrical shell from shape with shape properties checked."""
-        Part.check_prop_dict(input_prop=shape_prop, required_keys=[RADIUS_KEY, HEIGHT_KEY, THICKNESS_KEY, NAME_KEY])
+        Part.check_prop_dict(
+            input_prop=shape_prop,
+            required_keys=[RADIUS_KEY, HEIGHT_KEY, THICKNESS_KEY, NAME_KEY],
+        )
         return super().from_shape(shape_prop)
 
 
@@ -217,7 +226,7 @@ class DiskPart(ShapedPart, Part):
     """Define a horizontal disk part object.
 
     Assume the component body frame align with the principle frame
-    x, y - orthogonal directions along radial direction; z - axial direction 
+    x, y - orthogonal directions along radial direction; z - axial direction
     """
 
     @staticmethod
@@ -230,8 +239,8 @@ class DiskPart(ShapedPart, Part):
 
         rsq = shape_prop[RADIUS_KEY] ** 2
         # Compute moment of inertia in principle directions
-        moi_rad = 1/12 * mass * (3 * rsq + shape_prop[THICKNESS_KEY] ** 2)
-        moi_axi = 1/2 * mass * rsq
+        moi_rad = 1 / 12 * mass * (3 * rsq + shape_prop[THICKNESS_KEY] ** 2)
+        moi_axi = 1 / 2 * mass * rsq
 
         # Return pure mass prop as a dictionary
         return {
@@ -252,20 +261,27 @@ class CylinderTankPart(ShapedPart, Part):
     """Define a cylinder tank component part object.
 
     Assume the component body frame align with the principle frame
-    x, y - orthogonal directions along radial direction; z - axial direction 
+    x, y - orthogonal directions along radial direction; z - axial direction
     """
 
     @classmethod
     def from_shape(cls, shape_prop):
         """Define a cylinder shaped tank part."""
         Part.check_prop_dict(
-            input_prop=shape_prop, required_keys=[RADIUS_KEY, HEIGHT_KEY, THICKNESS_KEY, DENSITY_KEY, NAME_KEY]
+            input_prop=shape_prop,
+            required_keys=[
+                RADIUS_KEY,
+                HEIGHT_KEY,
+                THICKNESS_KEY,
+                DENSITY_KEY,
+                NAME_KEY,
+            ],
         )
         # Instantiate an empty part and add children parts
         empty_mass_prop = {
             MASS_KEY: 0,
             MOI_KEY: np.zeros(shape=(3, 3), dtype=np.float64),
-            NAME_KEY: shape_prop[NAME_KEY]
+            NAME_KEY: shape_prop[NAME_KEY],
         }
         tank_part = cls.from_mass_prop_dict(mass_prop=empty_mass_prop)
 
@@ -276,36 +292,42 @@ class CylinderTankPart(ShapedPart, Part):
         density = shape_prop[DENSITY_KEY]
 
         # Create the child part - upper dome
-        upper_dome_name = f'{shape_prop[NAME_KEY]}_upper_dome'
-        upper_dome = DiskPart.from_shape(shape_prop={
-            RADIUS_KEY: radius,
-            THICKNESS_KEY: thickness,
-            NAME_KEY: upper_dome_name,
-            REL_POS_KEY: np.array([[0], [0], [height / 2]]),
-            DENSITY_KEY: density,
-        })
+        upper_dome_name = f"{shape_prop[NAME_KEY]}_upper_dome"
+        upper_dome = DiskPart.from_shape(
+            shape_prop={
+                RADIUS_KEY: radius,
+                THICKNESS_KEY: thickness,
+                NAME_KEY: upper_dome_name,
+                REL_POS_KEY: np.array([[0], [0], [height / 2]]),
+                DENSITY_KEY: density,
+            }
+        )
         tank_part.add_child_part(upper_dome)
 
         # Create the child part - lower dome
-        lower_dome_name = f'{shape_prop[NAME_KEY]}_lower_dome'
-        lower_dome = DiskPart.from_shape(shape_prop={
-            RADIUS_KEY: radius,
-            THICKNESS_KEY: thickness,
-            NAME_KEY: lower_dome_name,
-            REL_POS_KEY: np.array([[0], [0], [-height / 2]]),
-            DENSITY_KEY: density,
-        })
+        lower_dome_name = f"{shape_prop[NAME_KEY]}_lower_dome"
+        lower_dome = DiskPart.from_shape(
+            shape_prop={
+                RADIUS_KEY: radius,
+                THICKNESS_KEY: thickness,
+                NAME_KEY: lower_dome_name,
+                REL_POS_KEY: np.array([[0], [0], [-height / 2]]),
+                DENSITY_KEY: density,
+            }
+        )
         tank_part.add_child_part(lower_dome)
 
         # Create the child part - cylindrial wall
-        cylinder_wall_name = f'{shape_prop[NAME_KEY]}_cylindrical_wall'
-        cylinder_wall = CylindricalShellPart.from_shape(shape_prop={
-            RADIUS_KEY: radius,
-            HEIGHT_KEY: height,
-            THICKNESS_KEY: thickness,
-            NAME_KEY: cylinder_wall_name,
-            DENSITY_KEY: density,
-        })
+        cylinder_wall_name = f"{shape_prop[NAME_KEY]}_cylindrical_wall"
+        cylinder_wall = CylindricalShellPart.from_shape(
+            shape_prop={
+                RADIUS_KEY: radius,
+                HEIGHT_KEY: height,
+                THICKNESS_KEY: thickness,
+                NAME_KEY: cylinder_wall_name,
+                DENSITY_KEY: density,
+            }
+        )
         tank_part.add_child_part(cylinder_wall)
 
         return tank_part
@@ -314,4 +336,8 @@ class CylinderTankPart(ShapedPart, Part):
     def compute_mass_prop_from_shape(shape_prop: dict):
         """Compute moment of inertia for a cylindrical tank."""
         tank = CylinderTankPart.from_shape(shape_prop=shape_prop)
-        return {MASS_KEY: tank.mass, MOI_KEY: tank.moi, REL_POS_KEY: tank.rel_pos_from_parent_origin}
+        return {
+            MASS_KEY: tank.mass,
+            MOI_KEY: tank.moi,
+            REL_POS_KEY: tank.rel_pos_from_parent_origin,
+        }

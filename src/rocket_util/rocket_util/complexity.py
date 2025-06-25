@@ -28,6 +28,7 @@ class ComplexityMonitor:
 
     def _monitor_function(self, func):
         """Decorator to monitor function complexity."""
+
         @wraps(func)
         def wrapper(*args, **kwargs):
             start_time = time.perf_counter()
@@ -41,6 +42,7 @@ class ComplexityMonitor:
             self.monitor_log[func.__name__].append(elapsed_time)
 
             return result
+
         return wrapper
 
     def report_complexity(self):
@@ -54,7 +56,7 @@ class ComplexityMonitor:
                 f"{func_name}: called {len(times)} times | total execution time: {total_time:.6f}s | "
                 f"average execution time: {avg_time:.6f}"
             )
-        LOG.info('\n'.join(report_msg))
+        LOG.info("\n".join(report_msg))
 
 
 class BaseMonitoredClass:
@@ -63,7 +65,7 @@ class BaseMonitoredClass:
     def __init__(self):
         """Initialize the complexity monitor."""
         self.complexity_monitor = ComplexityMonitor()
-        self.complexity_monitor.register_monitored_object(self, ignored_methods=['report_complexity'])
+        self.complexity_monitor.register_monitored_object(self, ignored_methods=["report_complexity"])
 
     def report_complexity(self):
         """Report the complexity of the monitored functions."""

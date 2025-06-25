@@ -2,10 +2,12 @@
 
 from setuptools import setup, find_packages
 
+
 # Read requirements from requirements.txt
 def read_requirements(file_path):
     with open(file_path, "r") as f:
         return f.read().splitlines()
+
 
 setup(
     name="ascent_trajopt",

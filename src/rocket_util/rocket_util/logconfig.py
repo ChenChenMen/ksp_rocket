@@ -2,15 +2,16 @@
 
 import logging
 
+
 class CustomFormatter(logging.Formatter):
     """Custom formatter to add hardcoded colors based on log levels."""
-    
+
     # Define log level colors (ANSI escape codes)
     COLORS = {
-        logging.DEBUG: "\033[36m",      # Cyan
-        logging.WARNING: "\033[33m",    # Yellow
-        logging.ERROR: "\033[31m",      # Red
-        logging.CRITICAL: "\033[35;1m", # Bright Magenta
+        logging.DEBUG: "\033[36m",  # Cyan
+        logging.WARNING: "\033[33m",  # Yellow
+        logging.ERROR: "\033[31m",  # Red
+        logging.CRITICAL: "\033[35;1m",  # Bright Magenta
     }
     RESET = "\033[0m"  # Reset color
 

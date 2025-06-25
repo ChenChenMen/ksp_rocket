@@ -31,9 +31,7 @@ class TSTODesign:
         # Stage specific variables
         self.mass_prop = None
 
-    def optimize_dv_distribution(
-        self, structural_ratio: np.ndarray, engine_isp: np.ndarray
-    ):
+    def optimize_dv_distribution(self, structural_ratio: np.ndarray, engine_isp: np.ndarray):
         """Set up numerical optimization for input structural ratios (only for TSTO)."""
         # Check input consistency
         if structural_ratio.size != 2 or engine_isp.size != 2:
@@ -56,16 +54,12 @@ class TSTODesign:
             objective_func = np.prod(inv_mass_ratio_diff)
 
             # Compute gradient
-            gradient_derived_parts = (
-                inv_mass_ratio_diff * inv_mu_mass_ratio / exhaust_velo
-            )
+            gradient_derived_parts = inv_mass_ratio_diff * inv_mu_mass_ratio / exhaust_velo
             gradient_parts = objective_func * gradient_derived_parts
             gradient = gradient_parts[0] - gradient_parts[1]
 
             # Compute hessian
-            hessian_derived_parts = (
-                structural_ratio * inv_mu_mass_ratio / gradient_derived_parts
-            )
+            hessian_derived_parts = structural_ratio * inv_mu_mass_ratio / gradient_derived_parts
             hessian_parts = gradient_parts * hessian_derived_parts
             hessian = hessian_parts[0] - hessian_parts[1]
 
@@ -108,16 +102,11 @@ class TSTODesign:
             # Bias correction to moment
             cor_est_gradmean = est_gradmean / (1 - gradmean_eff)
             cor_est_gradvari = est_gradvari / (1 - gradvari_eff)
-            curr_percent_dv_stg2 -= (
-                learn_rate * cor_est_gradmean / (np.sqrt(cor_est_gradvari) + epsilon)
-            )
+            curr_percent_dv_stg2 -= learn_rate * cor_est_gradmean / (np.sqrt(cor_est_gradvari) + epsilon)
 
         self.structural_ratio = structural_ratio
         self.engine_isp = engine_isp
-        self.delta_v_distribution = (
-            np.array([curr_percent_dv_stg2, 1 - curr_percent_dv_stg2])
-            * self.total_delta_v
-        )
+        self.delta_v_distribution = np.array([curr_percent_dv_stg2, 1 - curr_percent_dv_stg2]) * self.total_delta_v
         # Update the mass properties
         self._evaluate_stage_mass()
 
@@ -133,11 +122,7 @@ class TSTODesign:
             inv_mu_mass_ratio = np.exp(-1 * stage_delta_v / G0 / stage_isp)
 
             # Compute stage total mass, structural mass, and propellant mass
-            total_mass = (
-                curr_total_mass
-                * (1 - stage_struc_ratio)
-                / (inv_mu_mass_ratio - stage_struc_ratio)
-            )
+            total_mass = curr_total_mass * (1 - stage_struc_ratio) / (inv_mu_mass_ratio - stage_struc_ratio)
             struc_mass = (total_mass - curr_total_mass) * stage_struc_ratio
             prop_mass = total_mass - struc_mass - curr_total_mass
             mass_prop[stage_ind, :] = [total_mass, struc_mass, prop_mass]
@@ -146,12 +131,7 @@ class TSTODesign:
         # Record solved mass properties
         LOG.info(
             "Solved mass property table as shown: [total mass, structural mass, propellant mass]\n"
-            + "\n".join(
-                [
-                    f"Stage {stage}: {stage_mass_prop}"
-                    for stage, stage_mass_prop in enumerate(mass_prop.tolist())
-                ]
-            )
+            + "\n".join([f"Stage {stage}: {stage_mass_prop}" for stage, stage_mass_prop in enumerate(mass_prop.tolist())])
         )
         self.mass_prop = mass_prop
 
@@ -178,7 +158,5 @@ class TSTODesign:
 if __name__ == "__main__":
     # Provide an example TSTO designer instance
     designer = TSTODesign(delta_v=9144, payload_mass=46)
-    designer.optimize_dv_distribution(
-        structural_ratio=np.array([0.096, 0.085]), engine_isp=np.array([370, 278])
-    )
+    designer.optimize_dv_distribution(structural_ratio=np.array([0.096, 0.085]), engine_isp=np.array([370, 278]))
     LOG.info(designer)
