@@ -2,7 +2,7 @@
 
 import warnings
 
-import jax.numpy as np
+import numpy as np
 from rocket_util.complexity import BaseMonitoredClass
 from rocket_util.logconfig import create_logger
 
@@ -130,7 +130,7 @@ class RungeKuttaIntegrator(BaseMonitoredClass, metaclass=SingletonMeta):
                 start_dvar + step * slope_array @ coeff_increment[idx : idx + 1, :].T,
             )
             # Update slope array since it is immutable
-            slope_array = slope_array.at[:, idx].set(slope_idx[:, 0])
+            slope_array[:, idx] = slope_idx[:, 0]
 
         # Compute the delta result from final weighting array
         return step * slope_array @ final_weighting.T, slope_array

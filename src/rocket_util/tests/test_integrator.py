@@ -3,7 +3,7 @@
 import jax.numpy as np
 import pytest
 
-from ascent_trajopt.integrator import RK_
+from rocket_util.integrator import RK_
 
 
 class TestIntegrator:

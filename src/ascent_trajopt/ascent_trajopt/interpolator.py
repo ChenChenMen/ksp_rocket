@@ -17,9 +17,13 @@ class BarycentricInterpolator:
         if interpolation_points.shape != interpolation_values.shape:
             raise ValueError("Interpolation points and values must have the same shape.")
 
+        # Organize the input data as 2D arrays, assuming interpolation direction is column-wise
+        interpolation_points = np.atleast_2d(interpolation_points)
+        interpolation_values = np.atleast_2d(interpolation_values)
+
         # Record bounds of interpolation points for validation during evaluation
-        self._min_bound = np.nanmin(interpolation_points)
-        self._max_bound = np.nanmax(interpolation_points)
+        self._min_bound = np.nanmin(interpolation_points, axis=1)
+        self._max_bound = np.nanmax(interpolation_points, axis=1)
 
         # Normalize the interpolation points to the interval [-1, 1]
         self.interpolation_points = self._normalize_interval(interpolation_points)
@@ -34,22 +38,27 @@ class BarycentricInterpolator:
 
     def _compute_weights(self):
         """Compute the barycentric weights for the interpolation points."""
-        diff_matrix = self.interpolation_points[:, None] - self.interpolation_points[None, :]
-        diff_matrix = diff_matrix + np.eye(diff_matrix.shape[0])  # Avoid division by zero on diagonal
-        weights = 1 / np.prod(diff_matrix, axis=1)
-        return weights
+        weights = []
+        for i in range(self.interpolation_points.shape[0]):  # Iterate over rows (sets of data)
+            diff_matrix = self.interpolation_points[i, :, None] - self.interpolation_points[i, None, :]
+            diff_matrix = diff_matrix + np.eye(diff_matrix.shape[0])  # Avoid division by zero on diagonal
+            row_weights = 1 / np.prod(diff_matrix, axis=1)
+            weights.append(row_weights)
+        return np.array(weights)
 
     def value_at(self, sample_points: ndarray):
         """Evaluate the interpolator at given points."""
-        if np.nanmin(sample_points) < self._min_bound or np.nanmax(sample_points) > self._max_bound:
+        sample_points = np.atleast_2d(sample_points)
+        if np.nanmin(sample_points, axis=1) < self._min_bound or np.nanmax(sample_points, axis=1) > self._max_bound:
             raise ValueError("Some given sample points are outside the interpolation range.")
 
         # Normalize the sample points to the interval [-1, 1]
         sample_points = self._normalize_interval(sample_points)
 
-        # Compute the barycentric interpolation values
-        diff_matrix = sample_points[:, None] - self.interpolation_points[None, :]
-        terms = self.weights / diff_matrix
-        numerator = np.sum(terms * self.interpolation_values, axis=1)
-        denominator = np.sum(terms, axis=1)
-        return numerator / denominator
+        interpolated_values = []
+        for idx, sample_point in enumerate(sample_points):  # Iterate over rows (sets of data)
+            # Compute the barycentric interpolation values
+            terms = self.weights[idx] / (sample_point[:, None] - self.interpolation_points[idx, None, :])
+            # Append the interpolated value for the current sample point
+            interpolated_values.append(np.sum(terms * self.interpolation_values, axis=1) / np.sum(terms, axis=1))
+        return np.squeeze(np.asarray(interpolated_values))

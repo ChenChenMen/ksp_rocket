@@ -73,10 +73,11 @@ class Scaler:
             )
         self.unit_basis_scale_factor_mapping = unit_basis_scale_factor_map
 
-    def _get_scaling_factor(self, value: Q_):
+    def _get_scaling_factor(self, to_unit: str):
         """Obtain the scaling factor per dimension of the value into a tuple."""
         scaling_factor = 1
-        for base_unit_key, dimension in value.dimensionality.items():
+        unit = Q_(1, to_unit)
+        for base_unit_key, dimension in unit.dimensionality.items():
             if (base_unit_key, dimension) in self.unit_basis_scale_factor_mapping:
                 scaling_factor /= self.unit_basis_scale_factor_mapping[(base_unit_key, dimension)]
             elif (base_unit_key, 1) in self.unit_basis_scale_factor_mapping:
@@ -84,17 +85,17 @@ class Scaler:
                 self.unit_basis_scale_factor_mapping[(base_unit_key, dimension)] = scaling_value
                 scaling_factor /= scaling_value
             else:
-                raise UnknownScalingBasisError(f"Unknown base unit '{base_unit_key}' in value {value}.")
+                raise UnknownScalingBasisError(f"Unknown base unit '{base_unit_key}' in unit {value}.")
         return scaling_factor.tolist()
 
-    def scale(self, value: Q_ | list[Q_]) -> Q_ | list[Q_]:
+    def scale(self, value: Q_ | list[Q_]) -> float | list[float]:
         """Scale the given value by the scale factor."""
         if isinstance(value, list):  # Scale each value in the list
             return [self.scale(v) for v in value]
-        return value * self._get_scaling_factor(value)
+        return value.m * self._get_scaling_factor(value.units)
 
-    def unscale(self, value: Q_ | list[Q_]) -> Q_ | list[Q_]:
+    def unscale(self, value: float | list[float], to_unit: str) -> Q_ | list[Q_]:
         """Unscale the given value by the scale factor."""
         if isinstance(value, list):  # Scale each value in the list
             return [self.scale(v) for v in value]
-        return value / self._get_scaling_factor(value)
+        return Q_(value / self._get_scaling_factor(to_unit), to_unit)

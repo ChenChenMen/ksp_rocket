@@ -39,9 +39,9 @@ class SinglePendulumDynamicsModel(DynamicsModel):
         # Unpack control vector
         force = control[0]
 
-        theta_dotdot = force / (self.MASS_PEND * self.LENG_PEND**2) - G0 * np.sin(theta) / self.LENG_PEND
+        theta_dotdot = force / (self.MASS_PEND * self.LENG_PEND**2) - G0.m * np.sin(theta) / self.LENG_PEND
         # Formulate the state equation
-        return np.asarray([theta_dot, theta_dotdot])
+        return np.stack([theta_dot, theta_dotdot])
 
 
 class PendulumCartDynamicsModel(DynamicsModel):
@@ -93,12 +93,12 @@ class PendulumCartDynamicsModel(DynamicsModel):
         theta_dotdot = (
             -1
             / (effective_total_mass * self.LENG_PEND)
-            * (0.5 * mass_leng_theta_dot_sq * sin_2theta + force * cos_theta + total_mass * G0 * sin_theta)
+            * (0.5 * mass_leng_theta_dot_sq * sin_2theta + force * cos_theta + total_mass * G0.m * sin_theta)
         )
         x_dotdot = (
             1
             / effective_total_mass
-            * (force + mass_leng_pend * theta_dot_sq * sin_theta + 0.5 * self.MASS_PEND * G0 * sin_2theta)
+            * (force + mass_leng_pend * theta_dot_sq * sin_theta + 0.5 * self.MASS_PEND * G0.m * sin_2theta)
         )
 
         # Formulate the state equation
@@ -114,24 +114,24 @@ class TestDynamicsModel:
         time = np.array([0.0])
         state = np.array([0.0, 0.0])
         ctrl = np.array([0.0])
-        pendulum_cart_dynamics = SinglePendulumDynamicsModel()
+        single_pendulum_dynamics = SinglePendulumDynamicsModel()
 
-        linearized_state_matrix = pendulum_cart_dynamics.continuous_state_matrix(time, state, ctrl)
-        expected_state_matrix = np.array([[0.0, 1.0], [-G0 / pendulum_cart_dynamics.LENG_PEND, 0.0]])
+        linearized_state_matrix = single_pendulum_dynamics.continuous_state_matrix(time, state, ctrl)
+        expected_state_matrix = np.array([[0.0, 1.0], [-G0.m / single_pendulum_dynamics.LENG_PEND, 0.0]])
         assert np.allclose(linearized_state_matrix, expected_state_matrix), (
             "Linearized state matrix does not match expected value"
         )
 
         # Duplicated calls to make sure the result is repeatable
-        assert np.allclose(linearized_state_matrix, pendulum_cart_dynamics.continuous_state_matrix(time, state, ctrl))
+        assert np.allclose(linearized_state_matrix, single_pendulum_dynamics.continuous_state_matrix(time, state, ctrl))
 
-        linearized_input_matrix = pendulum_cart_dynamics.continuous_input_matrix(time, state, ctrl)
+        linearized_input_matrix = single_pendulum_dynamics.continuous_input_matrix(time, state, ctrl)
         expected_input_matrix = np.array(
-            [[0.0], [1.0 / (pendulum_cart_dynamics.MASS_PEND * pendulum_cart_dynamics.LENG_PEND**2)]]
+            [[0.0], [1.0 / (single_pendulum_dynamics.MASS_PEND * single_pendulum_dynamics.LENG_PEND**2)]]
         )
         assert np.allclose(linearized_input_matrix, expected_input_matrix), (
             "Linearized input matrix does not match expected value"
         )
 
         # Duplicated calls to make sure the result is repeatable
-        assert np.allclose(linearized_input_matrix, pendulum_cart_dynamics.continuous_input_matrix(time, state, ctrl))
+        assert np.allclose(linearized_input_matrix, single_pendulum_dynamics.continuous_input_matrix(time, state, ctrl))
