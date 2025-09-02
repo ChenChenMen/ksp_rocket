@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def atmosphere_profile(alti):
     """
     Obtain real (unscaled) atmosphere profile by altitude.
@@ -28,7 +29,7 @@ def atmosphere_profile(alti):
 
     # Concatenate results
     T = np.concatenate([T_trop, T_lstrat, T_ustrat]) + 273.15  # Kelvin
-    P = np.concatenate([P_trop, P_lstrat, P_ustrat]) * 1000    # Pascal
+    P = np.concatenate([P_trop, P_lstrat, P_ustrat]) * 1000  # Pascal
     rho = P / (286.9 * T)
 
     # Reorder to match input h

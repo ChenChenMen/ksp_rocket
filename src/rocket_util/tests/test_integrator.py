@@ -1,6 +1,6 @@
 """Tests for integrator."""
 
-import jax.numpy as np
+import numpy as np
 import pytest
 
 from rocket_util.integrator import RK_

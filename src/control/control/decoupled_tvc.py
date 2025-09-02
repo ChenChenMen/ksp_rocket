@@ -37,7 +37,7 @@ for t in np.arange(t0, tf, dt):
     points[3].append(err * 180 / np.pi)  # convert to degrees for plotting
 
     u = kp * err + ki * int_err + kd * derr
-    u = min(max(u, -3/180*np.pi), 3/180*np.pi)
+    u = min(max(u, -3 / 180 * np.pi), 3 / 180 * np.pi)
 
     points[4].append(u * 180 / np.pi)  # convert to degrees for plotting
 
@@ -46,23 +46,23 @@ for t in np.arange(t0, tf, dt):
         ddtheta = -A * np.sin(u)
         return np.array([[dtheta[0]], [ddtheta]])
 
-    _, out = RK_.RK4(dynamics, start_dvar=[[theta], [dtheta]], start_indvar=t, step=dt, end_indvar=t+dt)
+    _, out = RK_.RK4(dynamics, start_dvar=[[theta], [dtheta]], start_indvar=t, step=dt, end_indvar=t + dt)
     theta, dtheta = out.ravel()
 
     prev_t = t
     prev_err = err
 
 fig, axs = plt.subplots(2, 1, figsize=(8, 6), sharex=True)
-axs[0].plot(points[0], points[1], label='Theta (deg)')
-axs[0].plot(points[0], points[2], label='dTheta (deg/s)')
-axs[0].set_ylabel('Angle / Rate (deg)')
+axs[0].plot(points[0], points[1], label="Theta (deg)")
+axs[0].plot(points[0], points[2], label="dTheta (deg/s)")
+axs[0].set_ylabel("Angle / Rate (deg)")
 axs[0].legend()
 axs[0].grid(True)
 
-axs[1].plot(points[0], points[3], label='Error (deg)')
-axs[1].plot(points[0], points[4], label='Control Input (deg)')
-axs[1].set_xlabel('Time (s)')
-axs[1].set_ylabel('Error / Control (deg)')
+axs[1].plot(points[0], points[3], label="Error (deg)")
+axs[1].plot(points[0], points[4], label="Control Input (deg)")
+axs[1].set_xlabel("Time (s)")
+axs[1].set_ylabel("Error / Control (deg)")
 axs[1].legend()
 axs[1].grid(True)
 
