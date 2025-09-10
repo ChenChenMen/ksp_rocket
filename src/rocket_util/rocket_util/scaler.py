@@ -85,7 +85,7 @@ class Scaler:
                 self.unit_basis_scale_factor_mapping[(base_unit_key, dimension)] = scaling_value
                 scaling_factor /= scaling_value
             else:
-                raise UnknownScalingBasisError(f"Unknown base unit '{base_unit_key}' in unit {value}.")
+                raise UnknownScalingBasisError(f"Unknown base unit '{base_unit_key}' in unit {to_unit}.")
         return scaling_factor.tolist()
 
     def scale(self, value: Q_ | list[Q_]) -> float | list[float]:

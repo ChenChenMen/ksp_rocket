@@ -9,7 +9,10 @@ LOG = create_logger(__name__)
 
 
 class ComplexityMonitor:
+    """Monitor and log the complexity of registered functions."""
+
     def __init__(self):
+        """Initialize the complexity monitor."""
         self.monitor_log = {}
 
     def register_monitored_object(self, obj, ignored_methods=None):
@@ -31,16 +34,14 @@ class ComplexityMonitor:
 
         @wraps(func)
         def wrapper(*args, **kwargs):
+            """Wrap the function to measure execution time."""
             start_time = time.perf_counter()
             result = func(*args, **kwargs)
             end_time = time.perf_counter()
             elapsed_time = end_time - start_time
 
             # Log execution time for the function
-            if func.__name__ not in self.monitor_log:
-                self.monitor_log[func.__name__] = []
-            self.monitor_log[func.__name__].append(elapsed_time)
-
+            self.monitor_log.setdefault(func.__name__, []).append(elapsed_time)
             return result
 
         return wrapper

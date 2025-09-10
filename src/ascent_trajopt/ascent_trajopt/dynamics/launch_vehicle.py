@@ -1,35 +1,33 @@
 """Define launch vehicle dynamics model."""
 
 import jax.numpy as np
-from rocket_util.units import Q_
-from rocket_util.constant import G0, MU_E, OMEGA_E, RADIUS_E, RHO_SEA_LEVEL_E, ConstantsProvider
+from rocket_util.constant import G0, MU_E, OMEGA_E, RADIUS_E, RHO_SEA_LEVEL_E, ScaledConstantProvider
 
 from ascent_trajopt.dynamics.base import DynamicsModel
 
 
-class TranslationOnlyConstant(ConstantsProvider):
+class LaunchVehicleConstantProvider(ScaledConstantProvider):
     """Physical constants for translation-only launch vehicle dynamics."""
 
-    def __init__(self, scaler=None):
+    def __init__(self):
         """Initialize translation-only constants with optional scaling."""
-        super().__init__(scaler)
-        self._stored_constant = {
-            "G0": G0,
-            "MU_E": MU_E,
-            "OMEGA_E": OMEGA_E,
-            "RADIUS_E": RADIUS_E,
-            "RHO_SEA_LEVEL_E": RHO_SEA_LEVEL_E,
-            "RHO_E": self._atmo_density,
-        }
+        super().__init__(
+            G0=G0,
+            MU_E=MU_E,
+            OMEGA_E=OMEGA_E,
+            RADIUS_E=RADIUS_E,
+            RHO_SEA_LEVEL_E=RHO_SEA_LEVEL_E,
+            RHO_E=self._atmo_density,
+        )
 
     def _atmo_density(self, altitude: float) -> float:
         """Compute atmospheric density at a given altitude."""
-        unscaled_si_altitude = self._scaler.unscale(altitude, "m")
+        unscaled_si_altitude = self.scaler.unscale(altitude, "m")
         # Simple exponential model for atmosphere density
         return self.RHO_SEA_LEVEL_E * np.exp(-unscaled_si_altitude.m / 8500)
 
 
-class LaunchVehicle3DOFTranslationOnly(DynamicsModel):
+class LaunchVehicle3DOF(DynamicsModel):
     """Launch vehicle dynamics model for trajectory optimization.
 
     Extreme simplification of a launch vehicle in 3D space as a point mass without
@@ -43,10 +41,10 @@ class LaunchVehicle3DOFTranslationOnly(DynamicsModel):
     # Control vector: throttle (1), thrust vector in ECI (3)
     REQUIRED_CTRL_NUM: int = 4
 
-    def __init__(self, physical_properties: TranslationOnlyConstant, launch_vehicle_properties: ConstantsProvider):
+    def __init__(self, launch_vehicle_properties: ScaledConstantProvider):
         """Initialize the launch vehicle dynamics model."""
         super().__init__()
-        self._physical_properties = physical_properties
+        self._physical_properties = LaunchVehicleConstantProvider()
         self._launch_vehicle_properties = launch_vehicle_properties
 
     def continuous_dynamics(self, time, state: np.ndarray, control: np.ndarray) -> np.ndarray:
@@ -91,7 +89,7 @@ class LaunchVehicle3DOFTranslationOnly(DynamicsModel):
         return np.concatenate((velocity, total_acceleration, -throttle * thrust_magnitude / exhaust_velocity))
 
 
-class LaunchVehicle3DOF(DynamicsModel):
+class LaunchVehicle6DOF(DynamicsModel):
     """Launch vehicle dynamics model for trajectory optimization.
 
     Simulating a point mass launch vehicle in 3D space with rigid body dynamics.

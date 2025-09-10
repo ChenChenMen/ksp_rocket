@@ -72,8 +72,8 @@ class TestBarycentricInterpolator:
 
         interp_point_value = (chebyshev_points, values)
         sample_point_value = (sample_points, interpolated_derivs)
-        self._plot_interpolation(interp_point_value, sample_point_value, expected_values, True)
-        assert np.allclose(interpolated_derivs, expected_values, atol=1e-2)
+        self._plot_interpolation(interp_point_value, sample_point_value, expected_values, show_plots)
+        assert np.allclose(interpolated_derivs, expected_values, atol=1e-8)
 
     def test_value_at_with_custom_points(self, show_plots):
         """Test value_at method with custom points."""
@@ -94,6 +94,28 @@ class TestBarycentricInterpolator:
         sample_point_value = (sample_points, interpolated_values)
         self._plot_interpolation(interp_point_value, sample_point_value, expected_values, show_plots)
         assert np.allclose(interpolated_values, expected_values, atol=1e-1)
+
+    def test_deriv_at_with_custom_points(self, show_plots):
+        """Test value_at method with custom points."""
+        original_func = lambda array: np.sin(array / 2)
+        derivative_func = lambda array: np.cos(array / 2) / 2
+
+        number_of_points = 20
+        # Generate Chebyshev points and corresponding values for a test function
+        chebyshev_points = -3 + 10 * np.cos(np.pi * np.arange(number_of_points + 1) / number_of_points)
+        values = original_func(chebyshev_points)
+        interpolator = BarycentricInterpolator(chebyshev_points, values)
+
+        # Test interpolation at the sample points
+        sample_points = np.linspace(-3, 7, 100)
+        expected_values = derivative_func(sample_points)
+        # Interpolated values at points
+        interpolated_values = interpolator.deriv_at(sample_points)
+
+        interp_point_value = (chebyshev_points, values)
+        sample_point_value = (sample_points, interpolated_values)
+        self._plot_interpolation(interp_point_value, sample_point_value, expected_values, show_plots)
+        assert np.allclose(interpolated_values, expected_values, atol=1e-8)
 
     def test_value_out_of_range(self):
         """Test value_at method with a point outside the interpolation range."""

@@ -33,7 +33,6 @@ def atmosphere_profile(alti):
     rho = P / (286.9 * T)
 
     # Reorder to match input h
-    h_all = np.concatenate([h_trop, h_lstrat, h_ustrat])
     order = np.argsort(np.argsort(alti))
     T = T[order]
     P = P[order]

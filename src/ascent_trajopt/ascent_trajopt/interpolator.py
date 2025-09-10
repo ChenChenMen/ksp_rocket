@@ -24,12 +24,14 @@ class BarycentricInterpolator:
         # Record bounds of interpolation points for validation during evaluation
         self._min_bound = np.nanmin(interpolation_points, axis=1)
         self._max_bound = np.nanmax(interpolation_points, axis=1)
+        self._interpolation_interval = self._max_bound - self._min_bound
 
         # Normalize the interpolation points to the interval [-1, 1]
         self.interpolation_points = self._normalize_interval(interpolation_points)
         self.interpolation_values = interpolation_values
 
         # Reigster the interpolation derivatives at the interpolation points
+        self._differentiation_matricies = None
         self._interpolation_derivatives = None
 
         # Register the barycentric weights for the interpolation points
@@ -53,18 +55,29 @@ class BarycentricInterpolator:
         return self._weights
 
     @property
+    def differentiation_matricies(self):
+        """Lazily compute the differentiation matrix for the interpolation points."""
+        if self._differentiation_matricies is None:
+            diff_matrix_collection = []
+            for i in range(self.interpolation_points.shape[0]):  # Iterate over rows (sets of data)
+                weight_ratio_matrix = self.weights[i, None, :] / self.weights[i, :, None]
+                points_diff_matrix = self.interpolation_points[i, :, None] - self.interpolation_points[i, None, :]
+                diff_matrix = weight_ratio_matrix / points_diff_matrix / self._interpolation_interval * 2
+                # Handle the diagonal elements separately, first with zero entry to coordinate sum
+                np.fill_diagonal(diff_matrix, 0)
+                # then drop the sum into the diagonal term
+                np.fill_diagonal(diff_matrix, -1 * np.sum(diff_matrix, axis=1))
+                diff_matrix_collection.append(diff_matrix)
+            self._differentiation_matricies = np.asarray(diff_matrix_collection)
+        return self._differentiation_matricies
+
+    @property
     def interpolation_derivatives(self):
         """Lazily compute the derivatives for the interpolation polynomial."""
         if self._interpolation_derivatives is None:
             derivatives = []
             for i in range(self.interpolation_points.shape[0]):  # Iterate over rows (sets of data)
-                weight_ratio_matrix = self.weights[i, None, :] / self.weights[i, :, None]
-                points_diff_matrix = self.interpolation_points[i, :, None] - self.interpolation_points[i, None, :]
-                diff_matrix = weight_ratio_matrix / points_diff_matrix
-                # Handle the diagonal elements separately, first with zero entry to coordinate sum
-                np.fill_diagonal(diff_matrix, 0)
-                # then drop the sum into the diagonal term
-                np.fill_diagonal(diff_matrix, -1 * np.sum(diff_matrix, axis=1))
+                diff_matrix = self.differentiation_matricies[i]
                 # Compute derivative from the differentiation matrix
                 derivatives.append((diff_matrix @ self.interpolation_values[i, :, None]).squeeze())
             self._interpolation_derivatives = np.asarray(derivatives)
