@@ -15,6 +15,7 @@ def with_example_scaler():
     yield
     ScaledConstantProvider.set_scaler(None)
 
+
 @pytest.fixture
 def example_constant_provider():
     """Fixture to provide a ConstantsProvider instance."""

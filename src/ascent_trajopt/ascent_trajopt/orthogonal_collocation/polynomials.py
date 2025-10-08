@@ -53,7 +53,7 @@ def with_orthopoly_cache(key: str = None):
 
 def get_legendre_polynomial_coefficients(nth: int):
     """Compute the n-th Legendre polynomial coefficients via the generating function."""
-    _CACHE_KEY = f"legendre_polynomial_coefficients"
+    _CACHE_KEY = "legendre_polynomial_coefficients"
 
     @with_orthopoly_cache(key=_CACHE_KEY)
     def _generate_polynomial_coefficients(computed_coefficients=None):
@@ -84,7 +84,7 @@ def get_legendre_polynomial_coefficients(nth: int):
 
 
 @with_orthopoly_cache()
-def get_legendre_gauss_radau_points(nth: int) -> list:
+def get_legendre_gauss_radau_points(nth: int) -> np.ndarray:
     """Compute the orthogonal collocation points for the n-th Legendre polynomial."""
     nth_coefficients = get_legendre_polynomial_coefficients(nth)
     n_minus_1_coefficients = get_legendre_polynomial_coefficients(nth - 1)

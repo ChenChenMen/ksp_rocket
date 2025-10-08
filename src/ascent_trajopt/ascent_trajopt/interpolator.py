@@ -11,15 +11,10 @@ class BarycentricInterpolator:
     # interepolation points, if so, value is extracted directly from interpolation values.
     INTERPOLATION_ACCURACY = 1e-8
 
-    def __init__(self, interpolation_points: ndarray, interpolation_values: ndarray):
+    def __init__(self, interpolation_points: ndarray, interpolation_values: ndarray = None):
         """Initialize the interpolator with given points and values."""
-        # Check if the input points and values are valid
-        if interpolation_points.shape != interpolation_values.shape:
-            raise ValueError("Interpolation points and values must have the same shape.")
-
         # Organize the input data as 2D arrays, assuming interpolation direction is column-wise
         interpolation_points = np.atleast_2d(interpolation_points)
-        interpolation_values = np.atleast_2d(interpolation_values)
 
         # Record bounds of interpolation points for validation during evaluation
         self._min_bound = np.nanmin(interpolation_points, axis=1)
@@ -28,31 +23,32 @@ class BarycentricInterpolator:
 
         # Normalize the interpolation points to the interval [-1, 1]
         self.interpolation_points = self._normalize_interval(interpolation_points)
-        self.interpolation_values = interpolation_values
+        self.interpolation_values = None
 
         # Reigster the interpolation derivatives at the interpolation points
         self._differentiation_matricies = None
         self._interpolation_derivatives = None
 
         # Register the barycentric weights for the interpolation points
-        self._weights = None
+        self._barycentric_weights = None
 
-    def _normalize_interval(self, points: ndarray) -> ndarray:
-        """Normalize the interpolation points to the interval [-1, 1]."""
-        return 2 * (points - self._min_bound) / (self._max_bound - self._min_bound) - 1
+        # If interpolation values are provided, register them
+        if interpolation_values is not None:
+            self.register_interpolation_values(interpolation_values)
 
     @property
-    def weights(self):
+    def barycentric_weights(self):
         """Lazily compute the barycentric weights for the interpolation points."""
-        if self._weights is None:
-            weights = []
+        if self._barycentric_weights is None:
+            barycentric_weights = []
             for i in range(self.interpolation_points.shape[0]):  # Iterate over rows (sets of data)
                 diff_matrix = self.interpolation_points[i, :, None] - self.interpolation_points[i, None, :]
-                diff_matrix = diff_matrix + np.eye(diff_matrix.shape[0])  # Avoid division by zero on diagonal
+                # Avoid division by zero on diagonal with indentity overwrite
+                diff_matrix = diff_matrix + np.eye(diff_matrix.shape[0])
                 row_weights = 1 / np.prod(diff_matrix, axis=1)
-                weights.append(row_weights)
-            self._weights = np.asarray(weights)
-        return self._weights
+                barycentric_weights.append(row_weights)
+            self._barycentric_weights = np.asarray(barycentric_weights)
+        return self._barycentric_weights
 
     @property
     def differentiation_matricies(self):
@@ -60,7 +56,7 @@ class BarycentricInterpolator:
         if self._differentiation_matricies is None:
             diff_matrix_collection = []
             for i in range(self.interpolation_points.shape[0]):  # Iterate over rows (sets of data)
-                weight_ratio_matrix = self.weights[i, None, :] / self.weights[i, :, None]
+                weight_ratio_matrix = self.barycentric_weights[i, None, :] / self.barycentric_weights[i, :, None]
                 points_diff_matrix = self.interpolation_points[i, :, None] - self.interpolation_points[i, None, :]
                 diff_matrix = weight_ratio_matrix / points_diff_matrix / self._interpolation_interval * 2
                 # Handle the diagonal elements separately, first with zero entry to coordinate sum
@@ -74,6 +70,8 @@ class BarycentricInterpolator:
     @property
     def interpolation_derivatives(self):
         """Lazily compute the derivatives for the interpolation polynomial."""
+        if self.interpolation_values is None:
+            raise ValueError("Interpolation values must be registered before computing derivatives.")
         if self._interpolation_derivatives is None:
             derivatives = []
             for i in range(self.interpolation_points.shape[0]):  # Iterate over rows (sets of data)
@@ -83,8 +81,21 @@ class BarycentricInterpolator:
             self._interpolation_derivatives = np.asarray(derivatives)
         return self._interpolation_derivatives
 
+    def register_interpolation_values(self, interpolation_values: ndarray):
+        """Register new interpolation values for the existing interpolation points."""
+        interpolation_values = np.atleast_2d(interpolation_values)
+        # Check if the input points and values are valid
+        if self.interpolation_points.shape != interpolation_values.shape:
+            raise ValueError("Interpolation points and values must have the same shape.")
+
+        self.interpolation_values = interpolation_values
+        # Reset the interpolation derivatives
+        self._interpolation_derivatives = None
+
     def value_at(self, sample_points: ndarray):
         """Evaluate the interpolated value at sample points."""
+        if self.interpolation_values is None:
+            raise ValueError("Interpolation values must be registered before evaluation.")
         return self._interpolate(sample_points, interpolation_values=self.interpolation_values)
 
     def deriv_at(self, sample_points: ndarray):
@@ -103,7 +114,7 @@ class BarycentricInterpolator:
         interpolated_values = []
         for idx, sample_point in enumerate(sample_points):  # Iterate over rows (sets of data)
             # Compute the barycentric interpolation values
-            terms = self.weights[idx] / (sample_point[:, None] - self.interpolation_points[idx, None, :])
+            terms = self.barycentric_weights[idx] / (sample_point[:, None] - self.interpolation_points[idx, None, :])
             interpolated_row = np.sum(terms * interpolation_values, axis=1) / np.sum(terms, axis=1)
 
             # Replace adjacent values within accuracy of interpolation points with the original interpolation values
@@ -115,5 +126,8 @@ class BarycentricInterpolator:
 
             # Append the interpolated value for the current sample point
             interpolated_values.append(interpolated_row)
-
         return np.squeeze(np.asarray(interpolated_values))
+
+    def _normalize_interval(self, points: ndarray) -> ndarray:
+        """Normalize the interpolation points to the interval [-1, 1]."""
+        return 2 * (points - self._min_bound) / (self._max_bound - self._min_bound) - 1

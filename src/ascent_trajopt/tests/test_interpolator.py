@@ -34,7 +34,9 @@ class TestBarycentricInterpolator:
 
     def test_value_at_with_unit_interval(self, show_plots):
         """Test value_at method with interval of [-1, 1]."""
-        expected_func = lambda array: np.arctan(5 * array)
+
+        def expected_func(array):
+            return np.arctan(5 * array)
 
         number_of_points = 20
         # Generate Chebyshev points and corresponding values for a test function
@@ -55,18 +57,15 @@ class TestBarycentricInterpolator:
 
     def test_deriv_at_with_unit_interval(self, show_plots):
         """Test deriv_at method with interval of [-1, 1]."""
-        original_func = lambda array: np.sin(5 * array)
-        derivative_func = lambda array: 5 * np.cos(5 * array)
-
         number_of_points = 20
         # Generate Chebyshev points and corresponding values for a test function
         chebyshev_points = np.cos(np.pi * np.arange(number_of_points + 1) / number_of_points)
-        values = original_func(chebyshev_points)
+        values = np.sin(5 * chebyshev_points)
         interpolator = BarycentricInterpolator(chebyshev_points, values)
 
         # Test interpolation at the sample points
         sample_points = np.linspace(-1, 1, 100)
-        expected_values = derivative_func(sample_points)
+        expected_values = 5 * np.cos(5 * sample_points)
         # Interpolated values at points
         interpolated_derivs = interpolator.deriv_at(sample_points)
 
@@ -97,18 +96,15 @@ class TestBarycentricInterpolator:
 
     def test_deriv_at_with_custom_points(self, show_plots):
         """Test value_at method with custom points."""
-        original_func = lambda array: np.sin(array / 2)
-        derivative_func = lambda array: np.cos(array / 2) / 2
-
         number_of_points = 20
         # Generate Chebyshev points and corresponding values for a test function
         chebyshev_points = -3 + 10 * np.cos(np.pi * np.arange(number_of_points + 1) / number_of_points)
-        values = original_func(chebyshev_points)
+        values = np.sin(chebyshev_points / 2)
         interpolator = BarycentricInterpolator(chebyshev_points, values)
 
         # Test interpolation at the sample points
         sample_points = np.linspace(-3, 7, 100)
-        expected_values = derivative_func(sample_points)
+        expected_values = np.cos(sample_points / 2) / 2
         # Interpolated values at points
         interpolated_values = interpolator.deriv_at(sample_points)
 

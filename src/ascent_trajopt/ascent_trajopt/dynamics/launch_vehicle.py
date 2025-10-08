@@ -106,13 +106,13 @@ class LaunchVehicle6DOF(DynamicsModel):
 
     def continuous_dynamics(self, state: np.ndarray, control: np.ndarray) -> np.ndarray:
         """Compute the continuous dynamics of the launch vehicle."""
-        # Extract state variables
-        position = state[:3]
-        velocity = state[3:6]
-        orientation = state[6:10]
-        angular_velocity = state[10:13]
-        mass = state[13]
+        # # Extract state variables
+        # position = state[:3]
+        # velocity = state[3:6]
+        # orientation = state[6:10]
+        # angular_velocity = state[10:13]
+        # mass = state[13]
 
-        # Extract control variables
-        throttle = control[0]
-        thrust_vector = control[1:]
+        # # Extract control variables
+        # throttle = control[0]
+        # thrust_vector = control[1:]

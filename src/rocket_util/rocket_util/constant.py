@@ -39,9 +39,7 @@ class ScaledConstantProvider:
         """Initialize constants with an optional scaling function."""
         self._stored_constant: dict = {
             key: (
-                self._get_magnitude(value)
-                if not isinstance(value, Q_) or self.scaler is None
-                else self.scaler.scale(value)
+                self._get_magnitude(value) if not isinstance(value, Q_) or self.scaler is None else self.scaler.scale(value)
             )
             for key, value in stored_constants.items()
         }
