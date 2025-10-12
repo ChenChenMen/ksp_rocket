@@ -65,6 +65,18 @@ class RungeKuttaIntegrator(BaseMonitoredClass, metaclass=SingletonMeta):
         "C": np.array([0, 1 / 4, 3 / 8, 12 / 13, 1, 1 / 2]),
     }
 
+    @staticmethod
+    def _condition_inputs(start_dvar, start_indvar, end_indvar):
+        """Condition the input arguments to ensure correct dimensions."""
+        # Ensure dimensions of starting independent and dependent variables
+        start_dvar = np.atleast_2d(start_dvar)
+        if start_dvar.shape[0] == 1 and start_dvar.shape[1] > 1:
+            start_dvar = start_dvar.T
+
+        start_indvar = np.atleast_1d(start_indvar)
+        end_indvar = np.atleast_1d(end_indvar)
+        return start_dvar, start_indvar, end_indvar
+
     def _explicit_runge_kutta_single_step(
         self,
         integrand: callable,
@@ -149,17 +161,16 @@ class RungeKuttaIntegrator(BaseMonitoredClass, metaclass=SingletonMeta):
         The integrand function handle requires the following form - f(t, x_vec)
         where t is a 1D ndarray and x_vec is a 2D ndarray with t.size == x_vec.shape[1]
         """
-        # Ensure dimensions of starting independent and dependent variables
-        start_dvar = np.atleast_2d(start_dvar)
-        start_indvar = np.atleast_1d(start_indvar)
-        end_indvar = np.atleast_1d(end_indvar)
+        start_dvar, start_indvar, end_indvar = self._condition_inputs(
+            start_dvar=start_dvar, start_indvar=start_indvar, end_indvar=end_indvar
+        )
 
         # Create the output array
-        output_array = [start_indvar, start_dvar]
+        output_indvar, output_dvar = [start_indvar], [start_dvar]
         for curr_indvar in np.arange(start_indvar[0], end_indvar[0], step):
             # Mark the initial starting dependent variable
             curr_indvar = np.atleast_1d(curr_indvar)
-            curr_dvar = output_array[1][:, -1:]
+            curr_dvar = output_dvar[-1]
 
             # Compute delta with general explicit RK single step integrator
             step_delta, _ = self._explicit_runge_kutta_single_step(
@@ -173,14 +184,16 @@ class RungeKuttaIntegrator(BaseMonitoredClass, metaclass=SingletonMeta):
 
             # Save history if specified, otherwise keep replacing the first element
             if save_history:
-                output_array[0] = np.hstack((output_array[0], curr_indvar + step))
-                output_array[1] = np.hstack((output_array[1], step_result))
+                output_indvar.append(curr_indvar + step)
+                output_dvar.append(step_result)
             else:
-                output_array[0] = np.atleast_1d(curr_indvar + step)
-                output_array[1] = np.atleast_2d(step_result)
+                output_indvar = [curr_indvar + step]
+                output_dvar = [step_result]
 
         # Return the integration result along with the independent variable value achieved
-        return output_array
+        output_indvar = np.atleast_1d(np.concatenate(output_indvar, axis=0).squeeze())
+        output_dvar = np.atleast_2d(np.concatenate(output_dvar, axis=1).squeeze())
+        return output_indvar, output_dvar
 
     def RK45(
         self,
@@ -193,15 +206,14 @@ class RungeKuttaIntegrator(BaseMonitoredClass, metaclass=SingletonMeta):
         save_history: bool = False,
     ):
         """Integrate with the Runge Kutta Fehlberg (RK45) with adaptive step size."""
-        # Ensure dimensions of starting independent and dependent variables
-        start_dvar = np.atleast_2d(start_dvar)
-        start_indvar = np.atleast_1d(start_indvar)
-        end_indvar = np.atleast_1d(end_indvar)
+        start_dvar, start_indvar, end_indvar = self._condition_inputs(
+            start_dvar=start_dvar, start_indvar=start_indvar, end_indvar=end_indvar
+        )
 
         # Select a default step size
         curr_step_size = 1
         # Create the output array with the adaptive step size if saving all history
-        output_array = [start_indvar, start_dvar, np.array(np.nan)] if save_history else [start_indvar, start_dvar]
+        output_indvar, output_dvar, output_stepsize = [start_indvar], [start_dvar], [np.asarray([np.nan])]
 
         # Outer loop that iterate through start to the end
         curr_indvar = start_indvar
@@ -210,7 +222,7 @@ class RungeKuttaIntegrator(BaseMonitoredClass, metaclass=SingletonMeta):
             # Compute the indvar to go
             indvar_to_go = end_indvar - curr_indvar
             # Mark the initial starting dependent variable
-            curr_dvar = output_array[1][:, -1:]
+            curr_dvar = output_dvar[-1]
 
             # Compute the estimated truncation error replacing final weighting
             truncation_error_butcher_tableau = [
@@ -247,15 +259,19 @@ class RungeKuttaIntegrator(BaseMonitoredClass, metaclass=SingletonMeta):
 
             # Save history if specified, otherwise keep replacing the first element
             if save_history:
-                output_array[0] = np.hstack((output_array[0], curr_indvar))
-                output_array[1] = np.hstack((output_array[1], step_result))
-                output_array[2] = np.hstack((output_array[2], prev_step_size))
+                output_indvar.append(curr_indvar)
+                output_dvar.append(step_result)
+                output_stepsize.append(np.atleast_1d(prev_step_size))
             else:
-                output_array[0] = np.atleast_1d(curr_indvar)
-                output_array[1] = np.atleast_2d(step_result)
+                output_indvar = [curr_indvar]
+                output_dvar = [step_result]
+                output_stepsize = [np.atleast_1d(prev_step_size)]
 
         # Return the integration result along with the independent variable value achieved
-        return output_array
+        output_indvar = np.atleast_1d(np.concatenate(output_indvar, axis=0).squeeze())
+        output_dvar = np.atleast_2d(np.concatenate(output_dvar, axis=1).squeeze())
+        output_stepsize = np.atleast_1d(np.concatenate(output_stepsize, axis=0).squeeze())
+        return output_indvar, output_dvar, output_stepsize
 
 
 # Create a Runge Kutta integrator singleton

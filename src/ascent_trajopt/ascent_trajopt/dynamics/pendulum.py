@@ -50,9 +50,9 @@ class PendulumCartDynamicsModel(DynamicsModel):
     REQUIRED_CTRL_NUM: int = 1
 
     # Define test model parameters
-    MASS_CART = 2
+    MASS_CART = 1
     MASS_PEND = 1
-    LENG_PEND = 0.5
+    LENG_PEND = 1
 
     def continuous_time_state_equation(self, time, state, control):
         """Define a continuous time state equation for tests.
@@ -97,7 +97,7 @@ class PendulumCartDynamicsModel(DynamicsModel):
         x_dotdot = (
             1
             / effective_total_mass
-            * (force + mass_leng_pend * theta_dot_sq * sin_theta + 0.5 * self.MASS_PEND * gravity_accel * sin_2theta)
+            * (force + mass_leng_theta_dot_sq * sin_theta + 0.5 * self.MASS_PEND * gravity_accel * sin_2theta)
         )
 
         # Formulate the state equation

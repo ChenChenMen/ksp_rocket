@@ -55,6 +55,20 @@ class TestBarycentricInterpolator:
         self._plot_interpolation(interp_point_value, sample_point_value, expected_values, show_plots)
         assert np.allclose(interpolated_values, expected_values, atol=1e-2)
 
+    def test_value_at_interpolation_weight(self):
+        """Test weights_for_value_at method with interval of [-1, 1]."""
+        expected_func = np.arctan
+        number_of_points = 20
+        # Generate Chebyshev points and corresponding values for a test function
+        chebyshev_points = np.cos(np.pi * np.arange(number_of_points + 1) / number_of_points)
+        values = expected_func(chebyshev_points)
+        interpolator = BarycentricInterpolator(chebyshev_points, values)
+
+        weight_array = interpolator.weights_for_value_at(0.1)
+        assert np.isclose(weight_array @ values, interpolator.value_at(0.1))
+        weight_array = interpolator.weights_for_value_at(1.0)
+        assert np.isclose(weight_array @ values, interpolator.value_at(1.0))
+
     def test_deriv_at_with_unit_interval(self, show_plots):
         """Test deriv_at method with interval of [-1, 1]."""
         number_of_points = 20
@@ -119,3 +133,14 @@ class TestBarycentricInterpolator:
         interpolator = BarycentricInterpolator(points, values)
         with pytest.raises(ValueError):
             interpolator.value_at(-1.0)
+
+    def test_with_custom_min_max_bounds(self):
+        """Test construction of an interpolator with custom min/max bounds."""
+        points, values = np.asarray([0.0, 1.0, 2.0]), np.asarray([1.0, 4.0, 9.0])
+        interpolator = BarycentricInterpolator(points, values, min_bound=-1, max_bound=5)
+        assert np.isclose(interpolator.value_at(-1.0), 0)
+        assert np.isclose(interpolator.value_at(-0.5), 0.25)
+        assert np.isclose(interpolator.value_at(0.0), 1.0)
+        assert np.isclose(interpolator.value_at(2.0), 9.0)
+        assert np.isclose(interpolator.value_at(4.0), 25.0)
+        assert np.isclose(interpolator.value_at(5.0), 36.0)

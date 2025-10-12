@@ -36,8 +36,9 @@ class HPDiscretizer:
         """
         self.segment_scheme = segment_scheme
 
-        discretized_point_collection, num_point_rolling_collection = [], []
         previous_end_time, total_num_points = 0, 0
+        discretized_point_collection, num_point_rolling_collection = [], []
+        segment_bound_collection = [0]
 
         # Iteratively discretize each segment and append the points
         for idx, (n_points, end_time) in enumerate(self.segment_scheme):
@@ -45,6 +46,7 @@ class HPDiscretizer:
             if end_time <= previous_end_time or end_time > 1:
                 raise ValueError(f"Invalid segment end time {end_time} for the {idx}th segment with {n_points} points.")
 
+            segment_bound_collection.append(end_time)
             # Discretize the segment and append the points
             interval_length = end_time - previous_end_time
 
@@ -66,14 +68,32 @@ class HPDiscretizer:
         self.total_num_points = total_num_points
         self.total_num_segments = len(self.segment_scheme)
 
+        # Internal interpolator cache
+        self._interpolator_reference = {}
+        # Internal track of the bounds between segments
+        self._segment_bound_collection = segment_bound_collection
+
     def get_interpolator_for_segment(self, segment_index: int) -> BarycentricInterpolator:
         """Get the interpolator for a specific segment."""
+        if segment_index in self._interpolator_reference:
+            return self._interpolator_reference[segment_index]
+
         if segment_index < 0 or segment_index >= len(self.segment_scheme):
             raise IndexError(f"Segment index {segment_index} is out of range.")
 
         # Get the collocation points for the segment
         segment_points = self.discretized_point_collection[segment_index]
-        return BarycentricInterpolator(interpolation_points=segment_points)
+
+        # Get the min max bound for the collocation points by end times
+        min_bound = self._segment_bound_collection[segment_index]
+        max_bound = self._segment_bound_collection[segment_index + 1]
+        interpolator = BarycentricInterpolator(interpolation_points=segment_points, min_bound=min_bound, max_bound=max_bound)
+        self._interpolator_reference[segment_index] = interpolator
+        return interpolator
+
+    def get_end_time_for_segment(self, segment_index: int) -> float:
+        """Get the end time for a specific segment."""
+        return self.segment_scheme[segment_index].end_time
 
     def _discretize_segment(self, n_points: int, interval_length: float):
         """Discretize a single segment with LGR points."""

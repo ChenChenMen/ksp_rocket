@@ -3,38 +3,29 @@
 import numpy as np
 import pytest
 
-from ascent_trajopt.orthogonal_collocation.array_store import DynamicVariablesArray
+from ascent_trajopt.dynamics.array_store import DynamicModelDimension
 from ascent_trajopt.orthogonal_collocation.discretizer import HPDiscretizer, HPSegmentConfig
 from ascent_trajopt.orthogonal_collocation.initial_guess import guess_from_linear_interpolation
-from ascent_trajopt.orthogonal_collocation.array_store import DynamicSystemDimension
 
 
 @pytest.mark.parametrize(
     "num_points, end_times",
     [
+        ([5], [1.0]),
         ([3, 4], [0.5, 1.0]),
         ([2, 3, 4], [0.3, 0.7, 1.0]),
     ],
 )
-def test_initial_guess_linear_interpolation(num_points, end_times):
+def test_initial_guess_linear_interpolation(num_points, end_times, dynamics_model, initial_condition, final_condition):
     """Test the initial guess generation using linear interpolation."""
     # Create a sample discretizer and dimension
-    dimension = DynamicSystemDimension(num_state=5, num_control=2)
+    dimension = DynamicModelDimension.from_dynamic_model(dynamics_model)
     discretizer = HPDiscretizer(
         segment_scheme=tuple(HPSegmentConfig(n_points, end_time) for n_points, end_time in zip(num_points, end_times))
     )
 
-    # Define initial and final conditions
-    initial_condition = DynamicVariablesArray(
-        np.array([1.0] * dimension.num_state + [0.0] * dimension.num_control), dimension
-    )
-    final_condition = DynamicVariablesArray(
-        np.array([10.0] * dimension.num_state + [5.0] * dimension.num_control), dimension
-    )
-
     # Generate the initial guess
     initial_guess = guess_from_linear_interpolation(discretizer, initial_condition, final_condition)
-
     # Check the shape of the generated guess
     assert initial_guess.size == discretizer.total_num_points * dimension.total_dimension + 1
 

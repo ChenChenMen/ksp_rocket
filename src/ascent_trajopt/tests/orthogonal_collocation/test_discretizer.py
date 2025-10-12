@@ -41,3 +41,10 @@ def test_num_points_and_discretized_point_collection():
     assert len(discretizer.discretized_point_collection) == len(segment_scheme)
     for idx, seg in enumerate(segment_scheme):
         assert len(discretizer.discretized_point_collection[idx]) == seg.n_points
+
+
+def test_get_end_time_for_segment():
+    """Test the get_end_time_for_segment method."""
+    discretizer = HPDiscretizer(segment_scheme=(HPSegmentConfig(3, 0.5), HPSegmentConfig(4, 1.0)))
+    assert np.isclose(discretizer.get_end_time_for_segment(segment_index=0), 0.5)
+    assert np.isclose(discretizer.get_end_time_for_segment(segment_index=1), 1.0)

@@ -1,9 +1,8 @@
 """Define collection of problem programmatically."""
 
-import numpy as np
-
 from ascent_trajopt.dynamics.base import DynamicsModel
-from ascent_trajopt.orthogonal_collocation.array_store import DynamicVariablesArray, OptimizationArray
+from ascent_trajopt.dynamics.array_store import DynamicVariablesArray
+from ascent_trajopt.orthogonal_collocation.array_store import OptimizationArray
 from ascent_trajopt.orthogonal_collocation.discretizer import HPDiscretizer
 from ascent_trajopt.orthogonal_collocation.initial_guess import guess_from_linear_interpolation
 

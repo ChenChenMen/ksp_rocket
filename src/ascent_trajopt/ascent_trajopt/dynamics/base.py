@@ -146,7 +146,7 @@ class DynamicsModel:
             stacked_input[-self.REQUIRED_CTRL_NUM :],
         )
         # Call the continuous time state equation
-        return self.xdot(time, state, control)
+        return self.continuous_time_state_equation(time, state, control)
 
     def continuous_time_state_equation(self, time: ndarray, state: ndarray, control: ndarray):
         """State equation implementation for a single timestamp.

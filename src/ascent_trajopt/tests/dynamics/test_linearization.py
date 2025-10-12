@@ -1,6 +1,6 @@
 """Test dynamics model."""
 
-import jax.numpy as np
+import numpy as np
 
 from ascent_trajopt.dynamics.pendulum import SinglePendulumDynamicsModel
 from rocket_util.constant import G0
