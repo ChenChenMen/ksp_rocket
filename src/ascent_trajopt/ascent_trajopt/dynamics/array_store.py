@@ -22,7 +22,7 @@ class DynamicModelDimension:
         return self.num_state + self.num_control
 
     @classmethod
-    def from_dynamic_model(cls, dynamics_model: "DynamicsModel") -> "DynamicModelDimension":
+    def from_dynamic_model(cls, dynamics_model: DynamicsModel) -> "DynamicModelDimension":
         """Create a dimension instance from a dynamic model."""
         return cls(num_state=dynamics_model.REQUIRED_STATE_NUM, num_control=dynamics_model.REQUIRED_CTRL_NUM)
 
