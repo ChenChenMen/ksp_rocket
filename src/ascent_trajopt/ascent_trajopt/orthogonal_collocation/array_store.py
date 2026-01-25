@@ -15,7 +15,7 @@ class OptimizationArray(np.ndarray):
         discretizer: HPDiscretizer,
         dimension: DynamicModelDimension,
     ):
-        """Subclass ndarray to include discretizer information."""
+        """Subclass ndarray to construct an orthogonal collocation optimization variable array."""
         casted_array = np.asarray(input_array).view(cls)
         casted_array.discretizer = discretizer
         casted_array.dimension = dimension

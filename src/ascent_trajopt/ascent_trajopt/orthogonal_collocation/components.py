@@ -16,9 +16,6 @@ class ProblemInputComponents:
     initial_condition: DynamicVariablesArray
     final_condition: DynamicVariablesArray
 
-    # Internally inferred problem definition
-    _dimension: DynamicModelDimension = None
-
     @property
     def dimension(self) -> DynamicModelDimension:
         """Get the dynamic model dimension."""

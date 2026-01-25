@@ -2,87 +2,24 @@
 
 import numpy as np
 import pytest
+from optimization.constraints import ConstraintKind
+from optimization.differentiation import get_jacobian_by_perturbation
 from scipy.linalg import block_diag
 
 from ascent_trajopt.dynamics.array_store import DynamicModelDimension
 from ascent_trajopt.dynamics.pendulum import SinglePendulumDynamicsModel
-from ascent_trajopt.orthogonal_collocation.constraints import (
-    OrthogonalCollocationConstraint,
-    ConstraintJacobian,
-    LinearEqualityConstraint,
-    get_constraint_jacobian_by_perturbation,
-)
+from ascent_trajopt.orthogonal_collocation.constraints import OrthogonalCollocationConstraint
 
 
-def test_constraint_jacobian_from_slice():
-    """Test the slice matrix generation in ConstraintJacobian."""
-    matrix = np.array([[1, 2, 3], [4, 5, 6]])
-    constraint_jacobian = ConstraintJacobian.from_slice(
-        matrix, expected_optimization_array_length=6, segment_state_slice=(1, 4)
-    )
-    # Sandwich the eye matrix into the larger zero matrix
-    expected_selection_matrix = np.array([[0, 1, 0, 0, 0, 0], [0, 0, 1, 0, 0, 0], [0, 0, 0, 1, 0, 0]])
-    assert np.array_equal(constraint_jacobian.matrix, matrix)
-    assert np.array_equal(constraint_jacobian.selection_matrix, expected_selection_matrix)
-
-    constraint_jacobian = ConstraintJacobian.from_slice(
-        matrix, expected_optimization_array_length=6, segment_state_slice=(1, 3), end_with_time_partial=True
-    )
-    # Inferred by the time being the last element of the optimization array
-    expected_selection_matrix = np.array([[0, 1, 0, 0, 0, 0], [0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 1]])
-    assert np.array_equal(constraint_jacobian.matrix, matrix)
-    assert np.array_equal(constraint_jacobian.selection_matrix, expected_selection_matrix)
-
-
-def test_linear_equality_constraint_from_slice():
-    """Test the slice matrix generation in LinearEqualityConstraint."""
-    matrix = np.array([[1, 2, 3], [4, 5, 6]])
-    bias = np.array([7, 8])
-    linear_equality_constraint = LinearEqualityConstraint.from_slice(
-        matrix, bias, expected_optimization_array_length=6, segment_state_slice=(1, 4)
-    )
-    # Sandwich the eye matrix into the larger zero matrix
-    expected_selection_matrix = np.array([[0, 1, 0, 0, 0, 0], [0, 0, 1, 0, 0, 0], [0, 0, 0, 1, 0, 0]])
-    assert np.array_equal(linear_equality_constraint.matrix, matrix)
-    assert np.array_equal(linear_equality_constraint.bias, bias)
-    assert np.array_equal(linear_equality_constraint.selection_matrix, expected_selection_matrix)
-
-    linear_equality_constraint = LinearEqualityConstraint.from_slice(
-        matrix, bias, expected_optimization_array_length=6, segment_state_slice=(1, 3), end_with_time_partial=True
-    )
-    # Inferred by the time being the last element of the optimization array
-    expected_selection_matrix = np.array([[0, 1, 0, 0, 0, 0], [0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 1]])
-    assert np.array_equal(linear_equality_constraint.matrix, matrix)
-    assert np.array_equal(linear_equality_constraint.bias, bias)
-    assert np.array_equal(linear_equality_constraint.selection_matrix, expected_selection_matrix)
-
-
-def test_jacobian_from_linear_equality_constraint():
-    """Test the conversion from LinearEqualityConstraint to ConstraintJacobian."""
-    matrix = np.array([[1, 2, 3], [4, 5, 6]])
-    bias = np.array([7, 8])
-    linear_equality_constraint = LinearEqualityConstraint(
-        matrix=matrix,
-        bias=bias,
-        selection_matrix=np.array([[0, 1, 0, 0, 0, 0], [0, 0, 1, 0, 0, 0], [0, 0, 0, 1, 0, 0]]),
-    )
-    constraint_jacobian = ConstraintJacobian.from_linear_equality_constraint(linear_equality_constraint)
-    assert np.array_equal(constraint_jacobian.matrix, matrix)
-    assert np.array_equal(constraint_jacobian.selection_matrix, linear_equality_constraint.selection_matrix)
-
-
-def test_linear_equality_constraint_from_jacobian():
-    """Test the conversion from ConstraintJacobian to LinearEqualityConstraint."""
-    matrix = np.array([[1, 2, 3], [4, 5, 6]])
-    constraint_jacobian = ConstraintJacobian(
-        matrix=matrix,
-        selection_matrix=np.array([[0, 1, 0, 0, 0, 0], [0, 0, 1, 0, 0, 0], [0, 0, 0, 1, 0, 0]]),
-    )
-    bias = np.array([7, 8])
-    linear_equality_constraint = LinearEqualityConstraint.from_jacobian_bias(constraint_jacobian, bias)
-    assert np.array_equal(linear_equality_constraint.matrix, matrix)
-    assert np.array_equal(linear_equality_constraint.selection_matrix, constraint_jacobian.selection_matrix)
-    assert np.array_equal(linear_equality_constraint.bias, bias)
+def test_constraint_kinds(simple_input_components, simple_optimization_array):
+    """Test the constraint kinds."""
+    dynamic_constraint = OrthogonalCollocationConstraint(simple_input_components)
+    constraints = dynamic_constraint.eval_constraints(simple_optimization_array)
+    jacobians = dynamic_constraint.eval_jacobians(simple_optimization_array)
+    # Make sure the kinds returns the same length as constraints
+    kinds = dynamic_constraint.kinds
+    assert len(kinds) == len(constraints) == len(jacobians)
+    assert all(kind is ConstraintKind.EQUALITY for kind in kinds)
 
 
 def test_predefined_linear_constraints(input_components):
@@ -99,14 +36,14 @@ def test_predefined_linear_constraints(input_components):
     interpolated_matrix = np.kron(interpolated_weights, np.eye(dimension.total_dimension))
     assert np.allclose(final_condition_constraint.matrix, interpolated_matrix)
     assert np.allclose(final_condition_constraint.bias, -input_components.final_condition)
-    assert final_condition_constraint.selection_matrix.shape[0] == 25
+    assert len(final_condition_constraint.selection_indices) == final_condition_constraint.matrix.shape[1]
 
     # Initial condition constraint
     initial_condition_constraint = dynamic_constraint._boundary_condition_constraints[1]
     interpolator = discretizer.get_interpolator_for_segment(discretizer.total_num_segments - 1)
     assert np.allclose(initial_condition_constraint.matrix, np.eye(dimension.total_dimension))
     assert np.allclose(initial_condition_constraint.bias, -input_components.initial_condition)
-    assert initial_condition_constraint.selection_matrix.shape[0] == 5
+    assert len(initial_condition_constraint.selection_indices) == initial_condition_constraint.matrix.shape[1]
 
 
 def simple_pendulum_continuous_xdot(theta: float, theta_dot: float) -> np.ndarray:
@@ -118,7 +55,7 @@ def simple_pendulum_continuous_xdot(theta: float, theta_dot: float) -> np.ndarra
 def test_eval_collocation_constraints(simple_input_components, simple_optimization_array):
     """Test the evaluation of collocation constraints."""
     dynamic_constraint = OrthogonalCollocationConstraint(simple_input_components)
-    constraints = dynamic_constraint.eval_collocation_constraints(simple_optimization_array)
+    constraints = dynamic_constraint.eval_constraints(simple_optimization_array)
     # There should be 3 constraints: 1 initial, 1 final, and 1 collocation
     assert len(constraints) == 3
 
@@ -142,17 +79,15 @@ def test_eval_collocation_constraints(simple_input_components, simple_optimizati
 def test_eval_collocation_jacobians(simple_input_components, simple_optimization_array):
     """Test the evaluation of collocation constraint jacobians."""
     dynamic_constraint = OrthogonalCollocationConstraint(simple_input_components)
-    jacobians = dynamic_constraint.eval_collocation_jacobians(simple_optimization_array)
+    jacobians = dynamic_constraint.eval_jacobians(simple_optimization_array)
     # Compute Jacobians via finite difference perturbation for verification
-    jacobians_by_perturbation = get_constraint_jacobian_by_perturbation(
-        dynamic_constraint.eval_collocation_constraints, simple_optimization_array
-    )
+    jacobians_by_perturbation = get_jacobian_by_perturbation(dynamic_constraint.eval_constraints, simple_optimization_array)
 
     # There should be 3 constraints: 1 initial, 1 final, and 1 collocation
     assert len(jacobians) == len(jacobians_by_perturbation) == 3
     for jacobian, jacobian_by_perturbation in zip(jacobians, jacobians_by_perturbation):
-        actual_jacobian = jacobian.matrix @ jacobian.selection_matrix
-        assert np.allclose(actual_jacobian, jacobian_by_perturbation.matrix, rtol=1e-2)
+        actual_step = jacobian.matrix @ simple_optimization_array[jacobian.selection_indices]
+        assert np.allclose(actual_step, jacobian_by_perturbation.matrix @ simple_optimization_array, rtol=1e-2)
 
 
 @pytest.mark.skip(reason="Disabled until get_linearized_collocation_constraints is developed.")

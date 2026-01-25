@@ -1,4 +1,4 @@
-"""Setup mass prop package."""
+"""Setup control package."""
 
 from setuptools import setup, find_packages
 

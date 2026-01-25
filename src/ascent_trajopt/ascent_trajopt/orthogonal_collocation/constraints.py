@@ -1,116 +1,18 @@
 """Define a collocation constraints for trajectory optimization."""
 
-from collections.abc import Callable
-from dataclasses import dataclass
-
 import numpy as np
 from scipy.linalg import block_diag
 
-from ascent_trajopt.orthogonal_collocation.array_store import OptimizationArray
-from ascent_trajopt.orthogonal_collocation.components import ProblemInputComponents
+from optimization.constraints import BaseConstraint, ConstraintKind
+from optimization.differentiation import Jacobian, HessiansForJacobian
+from optimization.functional import LinearMap
 from rocket_util.common_decorators import under_development
 
-
-@dataclass
-class ConstraintJacobian:
-    """Define a jacobian matrix for optimization constraint.
-
-    The stored jacobian matrix is in size of m x n' where m is number of constraints,
-    n is number of downselected optimization variables. The downselection is defined
-    by segment_state_slice and end_with_time_partial from the expected optimization
-    array size n.
-    """
-
-    # Jacobian matrix in size of m x n'
-    matrix: np.ndarray
-    # Downselection matrix in size of n' x n
-    selection_matrix: np.ndarray = None
-
-    @classmethod
-    def from_slice(
-        cls,
-        matrix: np.ndarray,
-        expected_optimization_array_length: int = None,
-        segment_state_slice: tuple[int, int] = None,
-        end_with_time_partial: bool = False,
-    ) -> "ConstraintJacobian":
-        """Get the slice matrix for the segment from optimization matrix.
-
-        The slice matrix defines how to downselect the optimization array to apply
-        the stored jacobian matrix. The slice matrix is in size of n' x n for the
-        reason stated above. The return is very sparse with only one "1" per row.
-        """
-        # If no downselection is needed, return directly
-        if segment_state_slice is None or expected_optimization_array_length is None:
-            return cls(matrix, selection_matrix=None)
-
-        downselected_length = segment_state_slice[1] - segment_state_slice[0]
-        selection_matrix = np.hstack(
-            (
-                np.zeros((downselected_length, segment_state_slice[0])),
-                np.eye(downselected_length),
-                np.zeros((downselected_length, expected_optimization_array_length - segment_state_slice[1])),
-            )
-        )
-        if end_with_time_partial:  # Append time partial selection row to the last
-            time_selection_row = np.zeros((1, expected_optimization_array_length))
-            time_selection_row[0, -1] = 1.0
-            selection_matrix = np.vstack((selection_matrix, time_selection_row))
-
-        return cls(matrix, selection_matrix)
-
-    @classmethod
-    def from_linear_equality_constraint(cls, linear_equality_constraint: "LinearEqualityConstraint") -> "ConstraintJacobian":
-        """Formulate the constraint jacobian from linear equality constraint."""
-        return cls(matrix=linear_equality_constraint.matrix, selection_matrix=linear_equality_constraint.selection_matrix)
+from ascent_trajopt.orthogonal_collocation.array_store import OptimizationArray
+from ascent_trajopt.orthogonal_collocation.components import ProblemInputComponents
 
 
-@dataclass
-class LinearEqualityConstraint:
-    """Define an equality constraint for optimization.
-
-    The stored A matrix is in size of m x n' where m is number of constraints,
-    n is number of downselected optimization variables. The downselection is defined
-    by segment_state_slice and end_with_time_partial from the expected optimization
-    array size n.
-    """
-
-    # Define the constraint in the form of A @ x + b = 0
-    matrix: np.ndarray
-    bias: np.ndarray
-
-    # Downselection matrix in size of n' x n, Nonetype assumes n' == n
-    selection_matrix: np.ndarray = None
-
-    def evaluate_with(self, optimization_array: OptimizationArray) -> np.ndarray:
-        """Evaluate the linear equality constraint with the given optimization array."""
-        optimization_ndarray = optimization_array.view(np.ndarray)
-        if self.selection_matrix is None:
-            return self.matrix @ optimization_ndarray + self.bias
-        return self.matrix @ self.selection_matrix @ optimization_ndarray + self.bias
-
-    @classmethod
-    def from_slice(
-        cls,
-        matrix: np.ndarray,
-        bias: np.ndarray,
-        expected_optimization_array_length: int = None,
-        segment_state_slice: tuple[int, int] = None,
-        end_with_time_partial: bool = False,
-    ) -> "LinearEqualityConstraint":
-        """Formulate the linear equality constraint from slice parameters."""
-        jacobian = ConstraintJacobian.from_slice(
-            matrix, expected_optimization_array_length, segment_state_slice, end_with_time_partial
-        )
-        return cls.from_jacobian_bias(jacobian, bias)
-
-    @classmethod
-    def from_jacobian_bias(cls, jacobian: ConstraintJacobian, bias: np.ndarray) -> "LinearEqualityConstraint":
-        """Formulate the linear equality constraint from jacobian and bias."""
-        return cls(matrix=jacobian.matrix, bias=bias, selection_matrix=jacobian.selection_matrix)
-
-
-class OrthogonalCollocationConstraint:
+class OrthogonalCollocationConstraint(BaseConstraint):
     """Formulate orthogonal collocation constraints with dynamic model.
 
     The constraints governed by this class is organized by an index-inferred list.
@@ -155,8 +57,14 @@ class OrthogonalCollocationConstraint:
         self._differentiation_matrix_collection = []
 
         # Pre-determine the actually linear constraints
-        self._segment_connection_constraints: list[LinearEqualityConstraint] = []
-        self._boundary_condition_constraints: list[LinearEqualityConstraint] = []
+        self._segment_connection_constraints: list[LinearMap] = []
+        self._boundary_condition_constraints: list[LinearMap] = []
+
+        self._collocation_constraint_kind: list[ConstraintKind] = []
+        self._segment_connection_constraint_kind: list[ConstraintKind] = []
+
+        self._collocation_constraint_dimension: list[int] = []
+        self._segment_connection_constraint_dimension: list[int] = []
 
         max_bound_interpolated_weights = None
         total_dimension_eye_matrix = np.eye(self._dimension.total_dimension)
@@ -184,36 +92,64 @@ class OrthogonalCollocationConstraint:
                 interpolated_matrix = np.kron(max_bound_interpolated_weights, total_dimension_eye_matrix)
                 segement_connection_matrix = np.hstack((interpolated_matrix, -total_dimension_eye_matrix))
                 self._segment_connection_constraints.append(
-                    LinearEqualityConstraint.from_slice(
+                    LinearMap.from_slice(
                         matrix=segement_connection_matrix,
                         bias=np.zeros(self._dimension.total_dimension),
-                        expected_optimization_array_length=self._optimization_array_length,
-                        segment_state_slice=(start_index, end_index + self._dimension.total_dimension),
+                        selection_index_collection=[(start_index, end_index + self._dimension.total_dimension)],
                     )
                 )
+                self._segment_connection_constraint_kind.append(ConstraintKind.EQUALITY)
+                self._segment_connection_constraint_dimension.append(self._dimension.total_dimension)
+
+            # Register the constraint kind and theoratical dimensions
+            self._collocation_constraint_kind.append(ConstraintKind.EQUALITY)
+            self._collocation_constraint_dimension.append(self._dimension.num_state)
 
         # Formulate final condition constraint
         final_start_index, final_end_index = start_index, end_index
         self._boundary_condition_constraints.append(
-            LinearEqualityConstraint.from_slice(
+            LinearMap.from_slice(
                 matrix=np.kron(max_bound_interpolated_weights, total_dimension_eye_matrix),
                 bias=-problem_input.final_condition.view(np.ndarray),
-                expected_optimization_array_length=self._optimization_array_length,
-                segment_state_slice=(final_start_index, final_end_index),
+                selection_index_collection=[(final_start_index, final_end_index)],
             )
         )
 
         # Formulate initial condition constraint
         self._boundary_condition_constraints.append(
-            LinearEqualityConstraint.from_slice(
+            LinearMap.from_slice(
                 matrix=total_dimension_eye_matrix,
                 bias=-problem_input.initial_condition.view(np.ndarray),
-                expected_optimization_array_length=self._optimization_array_length,
-                segment_state_slice=OptimizationArray.point_index_slice(self.discretizer, self._dimension, 0),
+                selection_index_collection=[OptimizationArray.point_index_slice(self.discretizer, self._dimension, 0)],
             )
         )
 
-    def eval_collocation_constraints(self, optimization_array: OptimizationArray) -> list[np.ndarray]:
+        # Collect boundary condition constraint information
+        self._boundary_condition_constraint_kind = [ConstraintKind.EQUALITY, ConstraintKind.EQUALITY]
+        self._boundary_condition_constraint_dimension = [
+            problem_input.final_condition.dimension.total_dimension,
+            problem_input.initial_condition.dimension.total_dimension,
+        ]
+
+    @property
+    def kinds(self) -> list[ConstraintKind]:
+        """Collocation constraints are equality constraints."""
+        return (
+            self._collocation_constraint_kind
+            + self._segment_connection_constraint_kind
+            + self._boundary_condition_constraint_kind
+        )
+
+    @property
+    def dimensions(self) -> list[int]:
+        """Provide dimensions for each collocation constraint batch."""
+        return (
+            self._collocation_constraint_dimension
+            + self._segment_connection_constraint_dimension
+            + self._boundary_condition_constraint_dimension
+        )
+
+    def eval_constraints(self, optimization_array: OptimizationArray) -> list[np.ndarray]:
         """Evaluate collocation constraints given the current optimization array.
 
         === 1st patch: dynamic constraints ===
@@ -269,7 +205,7 @@ class OrthogonalCollocationConstraint:
         )
         return evaluated_constraints
 
-    def eval_collocation_jacobians(self, optimization_array: OptimizationArray) -> list[ConstraintJacobian]:
+    def eval_jacobians(self, optimization_array: OptimizationArray) -> list[Jacobian]:
         """Evaluate the jacobian of collocation constraints given the current optimization array.
 
         The jacobian matrices are organized in the same order as eval_collocation_constraints.
@@ -318,35 +254,36 @@ class OrthogonalCollocationConstraint:
             segment_time_partial = -0.5 * np.atleast_2d(np.concatenate(time_partial_collection)).T
 
             # Construct the segment jacobian
-            segment_jacobian = np.hstack((segment_differentiation_matrix - segment_state_partial, segment_time_partial))
+            segment_jacobian_matrix = np.hstack(
+                (segment_differentiation_matrix - segment_state_partial, segment_time_partial)
+            )
 
             # Format the collocation constraint jacobian
-            evaluated_jacobian.append(
-                ConstraintJacobian.from_slice(
-                    matrix=segment_jacobian,
-                    expected_optimization_array_length=self._optimization_array_length,
-                    segment_state_slice=OptimizationArray.segment_point_index_slice(
-                        self.discretizer, self._dimension, segment_index
-                    ),
-                    end_with_time_partial=True,
-                )
-            )
+            selection_index_collection = [
+                OptimizationArray.segment_point_index_slice(self.discretizer, self._dimension, segment_index),
+                optimization_array.expected_length - 1,
+            ]
+            evaluated_jacobian.append(Jacobian.from_slice(segment_jacobian_matrix, selection_index_collection))
 
         # Append up the pre-definded linearized constraints
         evaluated_jacobian.extend(  # Append the segment connection constraints [linear]
-            ConstraintJacobian.from_linear_equality_constraint(constraint)
-            for constraint in self._segment_connection_constraints
+            constraint.jacobian for constraint in self._segment_connection_constraints
         )
         evaluated_jacobian.extend(  # Append the boundary connection constraints [linear]
-            ConstraintJacobian.from_linear_equality_constraint(constraint)
-            for constraint in self._boundary_condition_constraints
+            constraint.jacobian for constraint in self._boundary_condition_constraints
         )
         return evaluated_jacobian
 
+    def eval_hessians(self, optimization_array: OptimizationArray) -> list[HessiansForJacobian]:
+        """Evaluate the hessians of collocation constraints given the current optimization array.
+
+        This is used to compute Hessian of the Lagrangian with Lagrangian multiplier to squash the
+        dimension. Therefore, this method returns a list ConstraintHessian, each represents a list
+        of square matrices. The output size should match that of eval_jacobians.
+        """
+
     @under_development("No need to linearizing collocation constraint until SQP solver implementation.")
-    def get_linearized_collocation_constraints(
-        self, optimization_array: OptimizationArray
-    ) -> list[LinearEqualityConstraint]:
+    def get_linearized_collocation_constraints(self, optimization_array: OptimizationArray) -> list[LinearMap]:
         """Formulate linearized collocation constraint defined in eval_collocation_constraint.
 
         === 1st patch: dynamic constraints ===
@@ -400,7 +337,7 @@ class OrthogonalCollocationConstraint:
                 self.discretizer, self._dimension, segment_index
             )
             segment_linear_constraints.append(
-                LinearEqualityConstraint(
+                LinearMap(
                     matrix=segment_jacobian,
                     bias=np.zeros(end_index - start_index),
                     end_with_time_partial=True,
@@ -412,36 +349,3 @@ class OrthogonalCollocationConstraint:
         segment_linear_constraints.extend(self._segment_connection_constraints)
         segment_linear_constraints.extend(self._boundary_condition_constraints)
         return segment_linear_constraints
-
-
-def get_constraint_jacobian_by_perturbation(
-    constraint_function: Callable[[OptimizationArray], list[np.ndarray]],
-    optimization_array: OptimizationArray,
-    perturbation_percentage: float = 1e-3,
-    min_perturbation: float = 1e-5,
-) -> list[ConstraintJacobian]:
-    """Numerically compute the constraint jacobian via finite difference perturbation."""
-    num_variables = optimization_array.expected_length
-
-    jacobian_partials: list[list[np.ndarray]] = []
-    for var_index in range(num_variables):
-        # Compute perturbation size
-        perturbation = max(abs(optimization_array[var_index]) * perturbation_percentage, min_perturbation)
-
-        # Perturb positively
-        perturbed_array_pos = optimization_array.copy()
-        perturbed_array_pos[var_index] += perturbation
-        constraint_pos_list = constraint_function(perturbed_array_pos)
-
-        # Perturb negatively
-        perturbed_array_neg = optimization_array.copy()
-        perturbed_array_neg[var_index] -= perturbation
-        constraint_neg_list = constraint_function(perturbed_array_neg)
-
-        for idx, (constraint_pos, constraint_neg) in enumerate(zip(constraint_pos_list, constraint_neg_list)):
-            partial = (constraint_pos - constraint_neg) / (2 * perturbation)
-            if len(jacobian_partials) == idx:
-                jacobian_partials.append([])
-            jacobian_partials[idx].append(np.atleast_2d(partial).T)
-
-    return [ConstraintJacobian(matrix=np.concatenate(jacobian_partial, axis=1)) for jacobian_partial in jacobian_partials]

@@ -17,4 +17,5 @@ def test_pendulum_cart_dynamics(uncontrolled_propagator):
         initial_state=initial_state,
         propagation_duration=5.0,
         state_labels=["theta", "theta_dot", "position", "velocity"],
+        suppress_plots=True,
     )
