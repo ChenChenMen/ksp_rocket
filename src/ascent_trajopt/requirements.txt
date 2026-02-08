@@ -1,5 +1,0 @@
-numpy
-jax
-matplotlib
-pint
-rocket_util
