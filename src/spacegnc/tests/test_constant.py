@@ -3,8 +3,20 @@
 import numpy as np
 import pytest
 
-from spacegnc.constant import G0, MU_E, GC, RADIUS_E, ScaledConstantProvider
+from spacegnc.constant import ScaledConstantProvider
 from spacegnc.scaler import Scaler, ScalingInput
+from spacegnc.units import Q_
+
+# Standard gravitational acceleration (m/s^2)
+G0 = Q_(1, "g0")
+# Gravitational constant (m^3 kg^-1 s^-2)
+GC = Q_(6.67430e-11, "m^3 kg^-1 s^-2")
+
+## Earth Specific constants
+# Standard gravitational parameter (m^3/s^2)
+MU_E = Q_(3.986004418e14, "m^3/s^2")
+# Earth's radius (m)
+RADIUS_E = Q_(6378137, "m")
 
 
 @pytest.fixture

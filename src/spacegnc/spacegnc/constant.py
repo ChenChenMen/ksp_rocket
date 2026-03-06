@@ -3,22 +3,6 @@
 from spacegnc.units import Q_
 from spacegnc.scaler import Scaler
 
-## Celestial body constants =======================================
-# Standard gravitational acceleration (m/s^2)
-G0 = Q_(1, "g0")
-# Gravitational constant (m^3 kg^-1 s^-2)
-GC = Q_(6.67430e-11, "m^3 kg^-1 s^-2")
-
-## Earth Specific constants
-# Standard gravitational parameter (m^3/s^2)
-MU_E = Q_(3.986e14, "m^3/s^2")
-# Earth's radius (m)
-RADIUS_E = Q_(6378137, "m")
-# Earth's rotation rate (rad/s)
-OMEGA_E = Q_(7.2921159e-5, "rad/s")
-# Sea level atmospheric density (kg/m^3)
-RHO_SEA_LEVEL_E = Q_(1.225, "kg/m^3")
-
 
 class ConstantNotDefinedError(KeyError):
     """Requested constant is not defined in constant provider."""

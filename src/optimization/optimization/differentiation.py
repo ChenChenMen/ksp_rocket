@@ -6,6 +6,8 @@ from typing import NamedTuple
 
 import numpy as np
 
+from optimization.slice_utils import resolve_slice
+
 
 class SingleSelectedGradientEntry(NamedTuple):
     """Used to define single selection from the gradient entry
@@ -138,6 +140,13 @@ class Jacobian:
             return self.matrix.dimension
         return self.matrix.shape[1]
 
+    @property
+    def T(self) -> "Jacobian":
+        """Get the transposed Jacobian."""
+        if isinstance(self.matrix, IdentityMatrixEntry):
+            return self
+        return Jacobian(self.matrix.T, self.selection_indices)
+
     @classmethod
     def from_slice(
         cls, matrix: np.ndarray | IdentityMatrixEntry, selection_index_collection: list[tuple[int, int] | int] = None
@@ -150,18 +159,7 @@ class Jacobian:
         interpreted as slice and the single integer will be interpreted as a single
         index, the collection shall be in order to how jacobian matrix rows.
         """
-        # If no downselection is needed, return directly
-        if selection_index_collection is None:
-            return cls(matrix, selection_indices=None)
-
-        # Resolve the indices from the collection
-        selection_indices = []
-        for element in selection_index_collection:
-            if isinstance(element, int):
-                selection_indices.append(element)
-            elif isinstance(element, tuple):
-                start_idx, end_idx = element
-                selection_indices.extend(range(start_idx, end_idx))
+        selection_indices = resolve_slice(selection_index_collection)
         return cls(matrix, selection_indices)
 
 

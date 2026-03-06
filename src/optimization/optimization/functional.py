@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from optimization.differentiation import Jacobian
+from optimization.slice_utils import resolve_slice
 
 
 @dataclass
@@ -53,9 +54,28 @@ class LinearMap:
         cls, matrix: np.ndarray, bias: np.ndarray, selection_index_collection: list[tuple[int, int] | int] = None
     ) -> "LinearMap":
         """Formulate the linear constraint from slice parameters."""
-        return cls(matrix=matrix, bias=bias, selection_indices=selection_index_collection)
+        selection_indices = resolve_slice(selection_index_collection)
+        return cls(matrix=matrix, bias=bias, selection_indices=selection_indices)
 
     @classmethod
     def from_jacobian_bias(cls, jacobian: Jacobian, bias: np.ndarray) -> "LinearMap":
         """Formulate the linear constraint from jacobian and bias."""
         return cls(matrix=jacobian.matrix, bias=bias, selection_indices=jacobian.selection_indices)
+
+
+class UnitedJacobian:
+    """Provide memory efficient operations on a collection of jacobians."""
+
+    def __init__(self, jacobians: list[Jacobian], is_horizontal: bool = False):
+        """Construct from a list of Jacobians."""
+        self._jacobians = jacobians
+        self._is_horizontal = is_horizontal
+
+    @property
+    def T(self) -> "UnitedJacobian":
+        """Return the transposed version of the united jacobian."""
+        return UnitedJacobian([jacobian.T for jacobian in self._jacobians], is_horizontal=not self._is_horizontal)
+
+    def __matmul__(self, full_variable_array: np.ndarray) -> np.ndarray:
+        """Evaluate the matrix multiplication with the given full array."""
+        return np.concatenate([linear_map.jacobian.multiply_by(full_variable_array) for linear_map in self.linear_maps])

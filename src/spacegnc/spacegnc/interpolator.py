@@ -80,12 +80,16 @@ class BarycentricInterpolator:
         if self.interpolation_values is None:
             raise ValueError("Interpolation values must be registered before computing derivatives.")
         if self._interpolation_derivatives is None:
-            derivatives = []
-            for i in range(self.interpolation_point_length):  # Iterate over rows (sets of data)
-                diff_matrix = self.differentiation_matricies[i]
-                # Compute derivative from the differentiation matrix
-                derivatives.append((diff_matrix @ self.interpolation_values[i, :, None]).squeeze())
-            self._interpolation_derivatives = np.asarray(derivatives)
+            self._interpolation_derivatives = np.asarray(
+                [
+                    # Compute derivative from the differentiation matrix
+                    np.squeeze(self.differentiation_matricies[i] @ self.interpolation_values[i, :, None])
+                    for i in range(self.interpolation_point_length)  # Iterate over rows (sets of data)
+                ]
+                if self.interpolation_point_length > 1
+                # If there is only one row of interpolation points, we can compute the derivative in one step
+                else (self.differentiation_matricies[0] @ self.interpolation_values.T).T
+            )
         return self._interpolation_derivatives
 
     def register_interpolation_values(self, interpolation_values: ndarray):
@@ -129,13 +133,66 @@ class BarycentricInterpolator:
 
     def _interpolate(self, sample_points: ndarray, interpolation_values: ndarray):
         """Evaluate the interpolator at given points."""
+        sample_points = np.atleast_2d(sample_points)
         # Append the interpolated value for the current sample point
-        interpolated_values = [
-            np.sum(interpolated_weight * interpolation_values, axis=1)
-            for interpolated_weight in np.atleast_2d(self.weights_for_value_at(sample_points))
-        ]
+        if self.interpolation_point_length == 1:
+            interpolated_weight = self.weights_for_value_at(sample_points)[0]
+            interpolated_values = [
+                np.sum(interpolated_weight * interpolation_value, axis=1) for interpolation_value in interpolation_values
+            ]
+        else:
+            interpolated_weights = np.atleast_2d(self.weights_for_value_at(sample_points))
+            interpolated_values = [
+                np.sum(interpolated_weight * interpolated_value, axis=1)
+                for interpolated_weight, interpolated_value in zip(interpolated_weights, interpolation_values)
+            ]
         return np.squeeze(np.asarray(interpolated_values))
 
     def _normalize_interval(self, points: ndarray) -> ndarray:
         """Normalize the interpolation points to the interval [-1, 1]."""
         return 2 * (points - self._min_bound) / (self._max_bound - self._min_bound) - 1
+
+
+class LinearInterpolator:
+    """Linear Interpolator for trajectory optimization."""
+
+    def __init__(self, interpolation_points: ndarray, interpolation_values: ndarray = None):
+        """Initialize the interpolator with given points and values."""
+        self.interpolation_points = np.atleast_2d(interpolation_points)
+        self.interpolation_point_length = self.interpolation_points.shape[0]
+        self.interpolation_point_count = self.interpolation_points.shape[1]
+        self.interpolation_values = None
+
+        if interpolation_values is not None:
+            self.register_interpolation_values(interpolation_values)
+
+    def register_interpolation_values(self, interpolation_values: ndarray):
+        """Register new interpolation values for the existing interpolation points."""
+        interpolation_values = np.atleast_2d(interpolation_values)
+        # Check if the input points and values are valid
+        if interpolation_values.shape[1] != self.interpolation_point_count:
+            raise ValueError("Interpolation points and values must have the same shape.")
+        if self.interpolation_point_length > 1 and interpolation_values.shape[0] != self.interpolation_point_length:
+            raise ValueError("Interpolation values must have the same number of rows as interpolation points.")
+
+        self.interpolation_values = interpolation_values
+
+    def value_at(self, sample_points: ndarray):
+        """Evaluate the interpolated value at sample points."""
+        sample_points = np.atleast_2d(sample_points)
+        if self.interpolation_values is None:
+            raise ValueError("Interpolation values must be registered before evaluation.")
+
+        if self.interpolation_point_length == 1:
+            interpolated_values = [
+                np.interp(sample_points[0], self.interpolation_points[0], interpolation_value)
+                for interpolation_value in self.interpolation_values
+            ]
+        else:
+            interpolated_values = [
+                np.interp(sample_point, interpolation_point, interpolation_value)
+                for sample_point, interpolation_point, interpolation_value in zip(
+                    sample_points, self.interpolation_points, self.interpolation_values
+                )
+            ]
+        return np.squeeze(np.asarray(interpolated_values))

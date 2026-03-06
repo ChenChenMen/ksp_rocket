@@ -7,7 +7,7 @@ from types import ModuleType
 class SlackedOptimizationArray(np.ndarray):
     """A thin wrapper around ndarray to represent optimization variables with slack variables."""
 
-    def __new__(cls, input_array, unslacked_length: int):
+    def __new__(cls, input_array: np.ndarray, unslacked_length: int):
         """Subclass ndarray to create optimziation array internal to solver with slack."""
         casted_array = np.asarray(input_array).view(cls)
         casted_array.unslacked_length = unslacked_length

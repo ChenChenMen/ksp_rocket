@@ -164,7 +164,7 @@ class MassPropertyNode:
 @dataclass
 class ShapedPart(metaclass=abc.ABCMeta):
     """Define a generic shape."""
-    
+
     massprop: MassPropertyNode
 
     @staticmethod

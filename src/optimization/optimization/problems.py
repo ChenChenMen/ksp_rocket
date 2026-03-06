@@ -15,9 +15,6 @@ class BaseProblem(metaclass=ABCMeta):
     def __init__(self):
         """Process constraints and register lagrange multipliers."""
         # Create the constraint kind partitions
-        self._equality_constraints = []
-        self._inequality_constraints = []
-
         self._equality_idx_dimension_map = {}
         self._inequality_idx_dimension_map = {}
 
@@ -32,27 +29,31 @@ class BaseProblem(metaclass=ABCMeta):
     def constraints(self) -> list[BaseConstraint]:
         """Provide all constraints of the problem."""
 
-    @property
-    def equality_constraints(self) -> list[BaseConstraint]:
-        """Provide all equality constraints of the problem."""
-        return self._equality_constraints
-
-    @property
-    def inequality_constraints(self) -> list[BaseConstraint]:
-        """Provide all inequality constraints of the problem."""
-        return self._inequality_constraints
-
     @abstractmethod
     def eval_objective(self, optimization_array: np.ndarray) -> float:
         """Evaluate the objective function given the current optimization array."""
 
+    def eval_equality_constraints(self, optimization_array: np.ndarray) -> list[np.ndarray]:
+        """Evaluate the equality constraints given the current optimization array."""
+        eval_results = []
+        for constraint in self.generate_equality_constraints():
+            eval_results.extend(constraint.eval_constraints(optimization_array))
+        return eval_results
+
+    def eval_inequality_constraints(self, optimization_array: np.ndarray) -> list[np.ndarray]:
+        """Evaluate the inequality constraints given the current optimization array."""
+        eval_results = []
+        for constraint in self.generate_inequality_constraints():
+            eval_results.extend(constraint.eval_constraints(optimization_array))
+        return eval_results
+
     def generate_equality_constraints(self) -> Generator[BaseConstraint, None, None]:
         """Generate a list of equality constraints."""
-        return (constraint for constraint in self._equality_constraints)
+        return (self.constraints[idx] for idx in self._equality_idx_dimension_map)
 
     def generate_inequality_constraints(self) -> Generator[BaseConstraint, None, None]:
         """Generate a list of inequality constraints."""
-        return (constraint for constraint in self._inequality_constraints)
+        return (self.constraints[idx] for idx in self._inequality_idx_dimension_map)
 
     def _process_constraints(self):
         """Process the constraints by kinds and initialize lagrangian multipliers."""
@@ -100,3 +101,7 @@ class LinearProgram(BaseProblem):
     def eval_objective(self, optimization_array: np.ndarray) -> float:
         """Evaluate the objective function given the current optimization array."""
         return self._objective.evaluate_with(optimization_array)
+
+    def get_objective_jacobian(self) -> LinearMap:
+        """Get the jacobian of the linear objective."""
+        return self._objective.jacobian
