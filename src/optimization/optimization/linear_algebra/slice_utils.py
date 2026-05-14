@@ -1,4 +1,11 @@
-def resolve_slice(selection_index_collection: list[tuple[int, int] | int] = None) -> list[int] | None:
+from typing import Annotated
+
+import numpy as np
+
+SliceType = Annotated[list[tuple[int, int] | int] | None, "Type for slice specifications"]
+
+
+def resolve_slice(selection_index_collection: SliceType = None) -> np.ndarray | None:
     """Resolve slice inputs into continuous slices."""
     # If no downselection is needed, return directly
     if selection_index_collection is None:
@@ -12,4 +19,4 @@ def resolve_slice(selection_index_collection: list[tuple[int, int] | int] = None
         elif isinstance(element, tuple):
             start_idx, end_idx = element
             selection_indices.extend(range(start_idx, end_idx))
-    return selection_indices
+    return np.unique(selection_indices)

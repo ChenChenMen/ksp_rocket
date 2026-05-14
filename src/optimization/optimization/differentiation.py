@@ -6,7 +6,7 @@ from typing import NamedTuple
 
 import numpy as np
 
-from optimization.slice_utils import resolve_slice
+from optimization.linear_algebra.slice_utils import resolve_slice
 
 
 class SingleSelectedGradientEntry(NamedTuple):

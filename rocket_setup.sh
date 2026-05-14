@@ -13,3 +13,5 @@ for dir in $package_dirs; do
     exit 1
   fi
 done
+
+pip install ruff

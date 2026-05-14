@@ -38,7 +38,6 @@ class LinearProgramInteriorPointSolver:
 
     def _use_default_initial_guess(self):
         """Use a default initial guess for the optimization array."""
-        
 
     def solve(self, initial_guess: np.ndarray, max_iterations: int = 100, rtol: float = 1e-3):
         """Solve the linear programming problem."""

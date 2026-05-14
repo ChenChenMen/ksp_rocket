@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from optimization.differentiation import Jacobian
-from optimization.slice_utils import resolve_slice
+from optimization.linear_algebra.slice_utils import resolve_slice
 
 
 @dataclass
